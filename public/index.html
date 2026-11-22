@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id" data-theme="light">
+<html lang="id" data-theme="light" data-palette="lavender">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,22 +8,33 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
     <div class="app-shell">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top">
-                <div class="brand-mark">
-                    <span class="brand-dot"></span>
-                    <div>
-                        <div class="brand-title">Video Toolkit</div>
-                        <div class="brand-sub">Studio Suite</div>
+                <div class="sidebar-brand-row">
+                    <div class="brand-mark">
+                        <span class="brand-dot"></span>
+                        <div>
+                            <div class="brand-title">Video Toolkit</div>
+                            <div class="brand-sub">Studio Suite</div>
+                        </div>
+                    </div>
+                    <button type="button" id="theme-toggle" class="icon-btn" title="Ganti Tema Terang/Gelap" aria-label="Ganti Tema">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                </div>
+                <div class="palette-bar">
+                    <span class="palette-label">Palet Pastel</span>
+                    <div class="palette-picker" title="Pilih Palet Pastel">
+                        <button type="button" class="palette-dot" data-set-palette="lavender" title="Pastel Lavender" aria-label="Pastel Lavender"></button>
+                        <button type="button" class="palette-dot" data-set-palette="sky" title="Pastel Sky" aria-label="Pastel Sky"></button>
+                        <button type="button" class="palette-dot" data-set-palette="rose" title="Pastel Rose" aria-label="Pastel Rose"></button>
+                        <button type="button" class="palette-dot" data-set-palette="peach" title="Pastel Peach" aria-label="Pastel Peach"></button>
                     </div>
                 </div>
-                <button type="button" id="theme-toggle" class="icon-btn" title="Ganti Tema Terang/Gelap" aria-label="Ganti Tema">
-                    <i class="fas fa-moon"></i>
-                </button>
             </div>
 
             <nav class="sidebar-nav" id="sidebar-nav">
@@ -114,6 +125,6 @@
     <div id="modal-root" class="modal-backdrop" style="display:none;"></div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script type="module" src="/js/main.js"></script>
+    <script type="module" src="/js/main.js?v=3"></script>
 </body>
 </html>

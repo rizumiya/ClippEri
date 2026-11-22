@@ -264,7 +264,7 @@ export async function mount(container, { onAddonsChanged } = {}) {
                         </div>
                         <div class="form-group">
                             <label>Warna Penanda Kata</label>
-                            <input type="color" name="highlightColor" value="${sub.highlightColor || "#10b981"}">
+                            <input type="color" name="highlightColor" value="${sub.highlightColor || "#a59fd8"}">
                         </div>
                         <div class="form-group">
                             <label>Warna Outline</label>

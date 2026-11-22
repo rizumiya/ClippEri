@@ -29,6 +29,24 @@ function applyTheme(theme) {
 
 applyTheme(localStorage.getItem("vt_theme") || "light");
 
+const VALID_PALETTES = ["lavender", "sky", "rose", "peach"];
+function applyPalette(palette) {
+    const chosen = VALID_PALETTES.includes(palette) ? palette : "lavender";
+    document.documentElement.setAttribute("data-palette", chosen);
+    localStorage.setItem("vt_palette", chosen);
+    document.querySelectorAll("[data-set-palette]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.setPalette === chosen);
+    });
+}
+
+applyPalette(localStorage.getItem("vt_palette") || "lavender");
+
+document.querySelectorAll("[data-set-palette]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        applyPalette(btn.dataset.setPalette);
+    });
+});
+
 if (themeBtn) {
     themeBtn.addEventListener("click", () => {
         const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";

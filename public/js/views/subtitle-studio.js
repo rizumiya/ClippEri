@@ -14,7 +14,7 @@ export async function mount(container) {
         lineSpacing: 0,
         outlineColor: "#000000",
         primaryColor: "#ffffff",
-        highlightColor: "#10b981",
+        highlightColor: "#a59fd8",
         highlightMode: "karaoke",
         maxLines: 2,
         maxWordsPerLine: 3,
