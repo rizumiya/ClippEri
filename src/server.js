@@ -709,6 +709,10 @@ app.get('/api/fs/list', async (req, res) => {
             return res.status(400).json({ error: 'Parameter dir wajib diisi.' });
         }
         const absDir = path.resolve(rawDir);
+        const statDir = await fs.stat(absDir).catch(() => null);
+        if (!statDir || !statDir.isDirectory()) {
+            return res.json({ dir: absDir, exists: false, files: [] });
+        }
         const entries = await fs.readdir(absDir, { withFileTypes: true });
         const results = [];
 
@@ -730,7 +734,7 @@ app.get('/api/fs/list', async (req, res) => {
             });
         }
 
-        res.json({ dir: absDir, files: results });
+        res.json({ dir: absDir, exists: true, files: results });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
