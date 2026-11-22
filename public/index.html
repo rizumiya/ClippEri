@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Toolkit AI</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-film"></i> Video Toolkit</h1>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">Advanced Automation Suite</p>
+        </header>
+
+        <div class="main-tabs">
+            <button class="main-tab-btn active" onclick="openMainTab('processing')">
+                <i class="fas fa-video"></i> Pemrosesan Video
+            </button>
+            <button class="main-tab-btn" onclick="openMainTab('tools')">
+                <i class="fas fa-toolbox"></i> Tools Umum
+            </button>
+        </div>
+
+        <div id="processing" class="main-tab-content active">
+            <div class="app-layout">
+                <nav class="sidebar">
+                    <ul class="sidebar-menu">
+                        <li data-sub="all-in-one" onclick="openSubTab(this)">
+                            <i class="fas fa-wand-magic-sparkles"></i>
+                            All In One
+                        </li>
+                        <li data-sub="multicut" class="active" onclick="openSubTab(this)">
+                            <i class="fas fa-cut"></i>
+                            Multi-Cut
+                        </li>
+                        <li data-sub="merge" onclick="openSubTab(this)">
+                            <i class="fas fa-link"></i>
+                            Merge
+                        </li>
+                        <li data-sub="hooks" onclick="openSubTab(this)">
+                            <i class="fas fa-brain"></i>
+                            AI Hooks
+                        </li>
+                        <li data-sub="subtitle" onclick="openSubTab(this)">
+                            <i class="fas fa-closed-captioning"></i>
+                            Subtitle AI
+                        </li>
+                        <li data-sub="upload" onclick="openSubTab(this)">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            Upload Repliz
+                        </li>
+                        <li data-sub="logs" onclick="openSubTab(this)">
+                            <i class="fas fa-terminal"></i>
+                            Logs
+                        </li>
+                        <li data-sub="settings" onclick="openSubTab(this)">
+                            <i class="fas fa-cog"></i>
+                            Settings
+                        </li>
+                    </ul>
+                </nav>
+
+                <div class="content-area">
+                    <div id="multicut" class="sub-tab-content active">
+                        <div class="elegant-section" style="border-left-color: #818cf8;">
+                            <div class="elegant-header">
+                                <i class="fas fa-scissors icon-gradient"
+                                    style="background: linear-gradient(135deg, #818cf8, #4f46e5); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Multi-File Cutter</h2>
+                                    <p>Potong video sumber menjadi beberapa klip pendek secara otomatis.</p>
+                                </div>
+                            </div>
+                            <form id="multicut-form">
+                                <div class="form-group">
+                                    <label>Source Folder</label>
+                                    <input type="text" name="sourceDir"
+                                        placeholder="Path to source videos (e.g. C:/Videos)" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Output Clips Folder</label>
+                                    <input type="text" name="clipsDir" value="hasil_potongan" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Max Clips</label>
+                                        <input type="number" name="maxClips" value="5">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Clip Duration (s)</label>
+                                        <input type="number" name="clipDuration" value="2" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Trim Start (Optional)</label>
+                                        <input type="text" name="trimStart" placeholder="e.g. 00:00:10">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Trim End (Optional)</label>
+                                        <input type="text" name="trimEnd" placeholder="e.g. 00:00:30">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-magic"
+                                    style="background: linear-gradient(135deg, #818cf8, #4f46e5); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);">
+                                    <i class="fas fa-play"></i> Run Multi-Cut
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="all-in-one" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #ec4899;">
+                            <div class="elegant-header">
+                                <i class="fas fa-wand-magic-sparkles icon-gradient"
+                                    style="background: linear-gradient(135deg, #f472b6, #db2777); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>All In One Video Suite</h2>
+                                    <p>Otomatisasi penuh: potong, proses AI, dan gabung dalam sekali jalan.</p>
+                                </div>
+                            </div>
+
+                            <form id="all-in-one-form">
+                                <div class="settings-section">
+                                    <h3 style="margin-bottom: 20px; color: var(--primary); font-size: 1rem;"><i
+                                            class="fas fa-cog"></i> Konfigurasi Awal</h3>
+                                    <div class="form-group">
+                                        <label>Source Video Folder (Original)</label>
+                                        <input type="text" name="allInOneSourceDir"
+                                            placeholder="Path to source videos (e.g. C:/Videos)" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="margin-top: 10px;">Final Video Folder <span
+                                                style="color:var(--text-muted); font-weight:400; font-size:0.85em;">(Destinasi
+                                                Gabungan)</span></label>
+                                        <input type="text" name="finalDir"
+                                            placeholder="Path output (e.g. C:/Videos/Hasil_AllInOne)" required>
+                                    </div>
+                                </div>
+
+                                <div class="settings-section" style="margin-top: 25px;">
+                                    <h3 style="margin-bottom: 15px; color: var(--primary); font-size: 1rem;"><i
+                                            class="fas fa-toggle-on"></i> Aktifkan Fitur</h3>
+                                    <div class="feature-toggles">
+                                        <label class="toggle-card">
+                                            <input type="checkbox" name="useMusic" id="aio-useMusic">
+                                            <span><i class="fas fa-music"></i> Add Backsound</span>
+                                        </label>
+                                        <label class="toggle-card">
+                                            <input type="checkbox" name="useHooks" id="aio-useHooks">
+                                            <span><i class="fas fa-magic"></i> AI Hooks</span>
+                                        </label>
+                                        <label class="toggle-card">
+                                            <input type="checkbox" name="useCaptions" id="aio-useCaptions">
+                                            <span><i class="fas fa-closed-captioning"></i> AI Captions</span>
+                                        </label>
+                                        <label class="toggle-card">
+                                            <input type="checkbox" name="useSubtitles" id="aio-useSubtitles">
+                                            <span><i class="fas fa-closed-captioning"></i> Auto Subtitle</span>
+                                        </label>
+                                        <label class="toggle-card">
+                                            <input type="checkbox" name="autoUpload" id="aio-autoUpload">
+                                            <span><i class="fas fa-cloud-upload-alt"></i> Upload Repliz</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="music-options" class="options-panel hidden">
+                                    <h3><i class="fas fa-music"></i> Backsound Settings</h3>
+                                    <div class="form-row cols-2">
+                                        <div class="form-group">
+                                            <label>Backsound Folder</label>
+                                            <input type="text" name="musicDir" placeholder="Default: backsound">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Music Selection Mode</label>
+                                            <select name="musicMode">
+                                                <option value="random">Random</option>
+                                                <option value="sequential">Sequential</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="hook-options" class="options-panel hidden">
+                                    <h3><i class="fas fa-magic"></i> AI Hook Settings</h3>
+                                    <div class="form-row cols-2">
+                                        <div class="form-group">
+                                            <label>Select Brand / Persona</label>
+                                            <select name="brandIndex" class="brand-select">
+                                                <option value="">-- No Brand Specific --</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Video Context (for Hook)</label>
+                                            <input type="text" name="hookContext" id="merge-hook-context"
+                                                placeholder="Describe the topic for AI generation">
+                                        </div>
+                                    </div>
+                                    <div class="form-row cols-2">
+                                        <div class="form-group">
+                                            <label>System Persona AI</label>
+                                            <select name="systemPersona" id="aio-system-persona">
+                                                <option value="default">1. Current</option>
+                                                <option value="business">2. Business</option>
+                                                <option value="atomic">3. Atomic</option>
+                                                <option value="mixed">4. Mixed Cycle (Business -> Current -> Atomic)
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Output Mode</label>
+                                            <select name="outputMode" id="aio-output-mode">
+                                                <option value="normal">Video / Captions Biasa</option>
+                                                <option value="video_caption_sheet">Video + Caption TXT + Spreadsheet
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row cols-2" style="margin-top: 10px;">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-stopwatch"></i> Hook Timing</label>
+                                            <select name="aioHookTimingMode" id="aio-hook-timing-mode"
+                                                onchange="toggleAioHooksTimingInput()">
+                                                <option value="full">Dari awal sampai akhir video</option>
+                                                <option value="custom">Waktu tertentu (custom)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" id="aio-hook-timing-input" style="display: none;">
+                                            <label><i class="fas fa-clock"></i> Waktu Hook (detik)</label>
+                                            <input type="text" name="aioHookTiming" id="aio-hook-timing-value"
+                                                placeholder="Format: detik_awal,detik_durasi (contoh: 0,5)">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="caption-options" class="options-panel hidden">
+                                    <h3><i class="fas fa-closed-captioning"></i> AI Captions Settings</h3>
+                                    <div class="form-row cols-2">
+                                        <div class="form-group">
+                                            <label>Pilih Brand / Persona (Caption)</label>
+                                            <select name="captionBrandIndex" class="brand-select">
+                                                <option value="">-- No Brand Specific --</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Konteks Caption (Opsional)</label>
+                                            <input type="text" name="captionContext" id="merge-caption-context"
+                                                placeholder="Konteks caption jika beda dari hook">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="subtitle-options-aio" class="options-panel hidden">
+                                    <h3><i class="fas fa-closed-captioning"></i> Subtitle Settings</h3>
+                                    <div class="form-row cols-2" style="margin-bottom: 15px;">
+                                        <div class="form-group">
+                                            <label>Pilih Brand / Persona (Opsional)</label>
+                                            <select name="subtitleBrandIndex" class="brand-select">
+                                                <option value="">-- No Brand Specific --</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Konteks Konten (Opsional)</label>
+                                            <input type="text" name="subtitleContext"
+                                                placeholder="Konteks cerita untuk AI Subtitle">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>External SRT & WAV Folder <span
+                                                style="color:var(--text-muted); font-weight:400; font-size:0.85em;">(Isi
+                                                jika sudah punya file - Timpa AI Gen)</span></label>
+                                        <input type="text" name="srtWavDir" id="aio-srtWavDir"
+                                            placeholder="Kosongkan jika ingin generate dari AI (Otomatis)">
+                                    </div>
+                                </div>
+
+                                <div id="repliz-options" class="options-panel hidden">
+                                    <h3><i class="fas fa-cloud-upload-alt"></i> Repliz Auto-Upload Config</h3>
+                                    <div class="form-group">
+                                        <label>Pilih Akun Repliz (boleh 1 sampai 3 akun)</label>
+                                        <div id="aio-repliz-account-list" class="account-list"
+                                            style="max-height: 180px; overflow-y: auto; padding: 12px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 12px; background: rgba(15, 23, 42, 0.35);">
+                                        </div>
+                                        <small style="display:block; margin-top:6px; color:var(--text-muted);">Daftar
+                                            diambil dari Settings → Repliz Account IDs.</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Mode Penjadwalan</label>
+                                        <input type="hidden" name="scheduleMode" id="hidden-scheduleMode" value="fixed">
+                                        <div class="schedule-mode-cards" style="margin-top: 8px;">
+                                            <div class="schedule-card active" data-mode="fixed" data-target="allinone">
+                                                <i class="fas fa-clock"></i>
+                                                <div class="sc-details">
+                                                    <strong>1 Untuk Semua</strong>
+                                                    <span>Dikirim jam sama</span>
+                                                </div>
+                                            </div>
+                                            <div class="schedule-card" data-mode="range" data-target="allinone">
+                                                <i class="fas fa-arrows-alt-h"></i>
+                                                <div class="sc-details">
+                                                    <strong>Rentang Waktu</strong>
+                                                    <span>Acak (13:00 - 14:00)</span>
+                                                </div>
+                                            </div>
+                                            <div class="schedule-card" data-mode="list" data-target="allinone">
+                                                <i class="fas fa-list-ol"></i>
+                                                <div class="sc-details">
+                                                    <strong>1 per 1 (List)</strong>
+                                                    <span>Pisah koma</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="schedule-input-wrapper" style="margin-top: 20px;">
+                                        <div id="schedule-input-fixed" class="schedule-input-group">
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Tanggal Posting</label>
+                                                    <input type="date" name="fixedDate" id="sched-fixed-date">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Jam Posting</label>
+                                                    <input type="time" name="fixedTime" value="13:00">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div id="schedule-input-range" class="schedule-input-group hidden">
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Tanggal Mulai</label>
+                                                    <input type="date" name="rangeStartDate"
+                                                        id="sched-range-start-date">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Tanggal Selesai</label>
+                                                    <input type="date" name="rangeEndDate" id="sched-range-end-date">
+                                                </div>
+                                            </div>
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Mulai Jam</label>
+                                                    <input type="time" name="rangeStart" value="13:00">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Sampai Jam</label>
+                                                    <input type="time" name="rangeEnd" value="17:00">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div id="schedule-input-list" class="schedule-input-group hidden">
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Tanggal Posting</label>
+                                                    <input type="date" name="listDate" id="sched-list-date">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Daftar Jam Spesifik per Video</label>
+                                                    <textarea name="listTimes" rows="2"
+                                                        placeholder="Contoh: 13:00, 13:14, 15:30"></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 25px; background: linear-gradient(135deg, #f472b6, #db2777); box-shadow: 0 8px 20px rgba(219, 39, 119, 0.3);">
+                                    <i class="fas fa-play"></i> Run All In One Process
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="merge" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #06b6d4;">
+                            <div class="elegant-header">
+                                <i class="fas fa-link icon-gradient"
+                                    style="background: linear-gradient(135deg, #22d3ee, #0891b2); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Standalone Merge</h2>
+                                    <p>Gabungkan klip video yang terpisah menjadi satu video utuh.</p>
+                                </div>
+                            </div>
+
+                            <form id="merge-form">
+                                <div class="form-group">
+                                    <label><i class="fas fa-folder-open"></i> Source Clips Folder</label>
+                                    <select id="merge-clips-dropdown" onchange="onClipsFolderSelect(this)">
+                                        <option value="">-- Loading Folders... --</option>
+                                        <option value="manual">Manual Entry...</option>
+                                    </select>
+                                    <input type="text" name="sourceDir" id="merge-manual-clipsDir"
+                                        placeholder="Enter path manually..." style="display: none;">
+                                </div>
+
+                                <div class="form-group">
+                                    <label><i class="fas fa-folder"></i> Final Video Folder</label>
+                                    <input type="text" name="finalDir" value="video_gabungan" required>
+                                </div>
+
+                                <div class="form-row cols-3">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-hashtag"></i> Final Video Count</label>
+                                        <input type="number" name="finalCount" value="3">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-layer-group"></i> Max Clips per Source</label>
+                                        <input type="number" name="maxPerSource" value="2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-list"></i> Max Sources (0=All)</label>
+                                        <input type="number" name="maxSources" value="0"
+                                            placeholder="Limit source videos">
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label><i class="fas fa-random"></i> Merge Mode</label>
+                                    <select name="mode">
+                                        <option value="sequential">Sequential</option>
+                                        <option value="random">Random</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-stopwatch"></i> Target Durasi Final: <span
+                                            id="merge-final-duration-display">17 detik</span></label>
+                                    <input type="range" name="finalDurationSec" id="merge-final-duration" min="5"
+                                        max="60" step="1" value="17"
+                                        oninput="document.getElementById('merge-final-duration-display').textContent = this.value + ' detik'">
+                                </div>
+
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label class="toggle-card">
+                                        <input type="checkbox" name="useMusic" id="merge-simple-useMusic">
+                                        <span><i class="fas fa-music"></i> Add Backsound</span>
+                                    </label>
+                                </div>
+
+                                <div id="music-options-simple" class="options-panel hidden">
+                                    <h3><i class="fas fa-music"></i> Backsound Settings</h3>
+                                    <div class="form-row cols-2">
+                                        <div class="form-group">
+                                            <label>Backsound Folder</label>
+                                            <input type="text" name="musicDir" placeholder="Default: backsound">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Music Selection Mode</label>
+                                            <select name="musicMode">
+                                                <option value="random">Random</option>
+                                                <option value="sequential">Sequential</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #22d3ee, #0891b2); box-shadow: 0 8px 20px rgba(8, 145, 178, 0.3);">
+                                    <i class="fas fa-play"></i> Run Merge
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="hooks" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #a855f7;">
+                            <div class="elegant-header">
+                                <i class="fas fa-magic icon-gradient"
+                                    style="background: linear-gradient(135deg, #a855f7, #7e22ce); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>AI Hooks Generator</h2>
+                                    <p>Buat teks hook super interaktif dengan AI Gemini khusus untuk video kamu.</p>
+                                </div>
+                            </div>
+
+                            <form id="hooks-form">
+                                <label><i class="fas fa-folder-open"></i> Source Video Folder</label>
+                                <input type="text" name="sourceDir" placeholder="Path to videos" required>
+
+                                <label><i class="fas fa-folder-download"></i> Output Folder</label>
+                                <input type="text" name="finalDir" value="video_with_hooks" required>
+
+                                <label><i class="fas fa-id-badge"></i> Select Brand / Persona</label>
+                                <select name="brandIndex" class="brand-select">
+                                    <option value="">-- No Brand Specific --</option>
+                                </select>
+
+                                <label><i class="fas fa-brain"></i> System Persona AI</label>
+                                <select name="systemPersona">
+                                    <option value="default">1. Current</option>
+                                    <option value="business">2. Business</option>
+                                    <option value="atomic">3. Atomic</option>
+                                    <option value="mixed">4. Mixed Cycle (Business -> Current -> Atomic)</option>
+                                </select>
+
+                                <label><i class="fas fa-lightbulb"></i> Video Context <span
+                                        style="color:var(--text-muted); font-weight:400; font-size:0.85em;">(Opsional)</span></label>
+                                <input type="text" name="context" id="hooks-context" placeholder="e.g. 'Fitness Tips'">
+
+                                <div class="form-group" style="margin-top: 16px;">
+                                    <label><i class="fas fa-stopwatch"></i> Hook Timing</label>
+                                    <select name="hookTimingMode" id="hooks-timing-mode"
+                                        onchange="toggleHooksTimingInput()">
+                                        <option value="full">Dari awal sampai akhir video</option>
+                                        <option value="custom">Waktu tertentu (custom)</option>
+                                    </select>
+                                </div>
+
+                                <div id="hooks-timing-input" class="form-group hidden" style="margin-top: 10px;">
+                                    <label><i class="fas fa-clock"></i> Waktu Hook (detik)</label>
+                                    <input type="text" name="hookTiming" id="hooks-timing-value"
+                                        placeholder="Format: detik_awal,detik_durasi (contoh: 0,5)">
+                                    <small style="display:block; margin-top:5px; color:var(--text-muted);">
+                                        Contoh: <strong>0,5</strong> = hook muncul dari detik 0 selama 5 detik
+                                    </small>
+                                </div>
+
+                                <div class="info-box" style="margin-bottom: 16px;">
+                                    <i class="fas fa-key"></i>
+                                    <span>Gemini API Key dikelola di tab <strong>Settings</strong>. Multi-key
+                                        didukung.</span>
+                                </div>
+
+                                <div class="premium-checkbox-wrapper">
+                                    <label class="premium-checkbox-container" for="hooks-useCaptions">
+                                        <input type="checkbox" id="hooks-useCaptions" name="useCaptions" value="true">
+                                        <div class="premium-checkbox-text">
+                                            <strong>+ Generate AI Captions (captions.json)</strong>
+                                            <span>AI akan membuat caption lengkap sekaligus hooknya.</span>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #a855f7, #7e22ce); box-shadow: 0 8px 20px rgba(168, 85, 247, 0.3);">
+                                    <i class="fas fa-wand-magic-sparkles"></i> Generate Hooks
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="subtitle" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #34d399;">
+                            <div class="elegant-header">
+                                <i class="fas fa-closed-captioning icon-gradient"
+                                    style="background: linear-gradient(135deg, #34d399, #10b981); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>AI Subtitle Audio Generator</h2>
+                                    <p>Tulis subtitle text ke video sekaligus mengisi suara narrator (TTS).</p>
+                                </div>
+                            </div>
+
+                            <form id="subtitle-form">
+                                <label><i class="fas fa-folder-open"></i> Source Video Folder</label>
+                                <input type="text" name="sourceDir" placeholder="Path to folder containing videos"
+                                    required>
+
+                                <label><i class="fas fa-folder-download"></i> Output Folder</label>
+                                <input type="text" name="finalDir" value="video_with_subtitle" required>
+
+                                <label><i class="fas fa-photo-video"></i> External SRT & WAV Folder <span
+                                        style="color:var(--text-muted); font-weight:400; font-size:0.85em;">(Opsional -
+                                        Timpa AI Gen)</span></label>
+                                <input type="text" name="srtWavDir"
+                                    placeholder="Path ke folder yang berisi file .srt dan .wav">
+
+                                <label><i class="fas fa-lightbulb"></i> Video Context <span
+                                        style="color:var(--text-muted); font-weight:400; font-size:0.85em;">(Opsional)</span></label>
+                                <input type="text" name="context" placeholder="Misal: 'Motivasi Hidup Sukses'">
+
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);">
+                                    <i class="fas fa-microphone-lines"></i> Generate Subtitle Audio
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="upload" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #f59e0b;">
+                            <div class="elegant-header">
+                                <i class="fas fa-cloud-upload-alt icon-gradient"
+                                    style="background: linear-gradient(135deg, #f59e0b, #d97706); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Manual Batch Upload Repliz</h2>
+                                    <p>Upload folder berisi video dan file captions.json ke akun Repliz Anda.</p>
+                                </div>
+                            </div>
+
+                            <form id="upload-form">
+                                <div class="form-group">
+                                    <label><i class="fas fa-folder-open"></i> Folder Video & Captions</label>
+                                    <input type="text" name="uploadDir" placeholder="Misal: C:/Videos/Hasil"
+                                        value="video_gabungan" required>
+                                    <small style="display:block; margin-top:5px; color:var(--text-muted);">Pastikan ada
+                                        file <code>captions.json</code> di dalam folder jika ingin menggunakan caption
+                                        AI.</small>
+                                </div>
+
+                                <div class="settings-section" style="margin-top: 25px;">
+                                    <h3 style="margin-bottom: 20px; color: var(--primary); font-size: 1rem;"><i
+                                            class="fas fa-clock"></i> Schedule Settings</h3>
+
+                                    <div class="form-group">
+                                        <label>Pilih Akun Repliz (boleh 1 sampai 3 akun)</label>
+                                        <div id="upload-repliz-account-list" class="account-list"
+                                            style="max-height: 180px; overflow-y: auto; padding: 12px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 12px; background: rgba(15, 23, 42, 0.35);">
+                                        </div>
+                                        <small style="display:block; margin-top:6px; color:var(--text-muted);">Daftar
+                                            diambil dari Settings → Repliz Account IDs.</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <input type="hidden" name="scheduleMode" id="hidden-upload-scheduleMode"
+                                            value="fixed">
+                                        <div class="schedule-mode-cards">
+                                            <div class="schedule-card active" data-mode="fixed" data-target="upload">
+                                                <i class="fas fa-clock"></i>
+                                                <div class="sc-details">
+                                                    <strong>1 Untuk Semua</strong>
+                                                    <span>Dikirim jam sama</span>
+                                                </div>
+                                            </div>
+                                            <div class="schedule-card" data-mode="range" data-target="upload">
+                                                <i class="fas fa-arrows-alt-h"></i>
+                                                <div class="sc-details">
+                                                    <strong>Rentang Waktu</strong>
+                                                    <span>Acak (13:00 - 14:00)</span>
+                                                </div>
+                                            </div>
+                                            <div class="schedule-card" data-mode="list" data-target="upload">
+                                                <i class="fas fa-list-ol"></i>
+                                                <div class="sc-details">
+                                                    <strong>1 per 1 (List)</strong>
+                                                    <span>Pisah koma</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="schedule-input-wrapper" style="margin-top: 20px;">
+                                        <div id="upload-schedule-input-fixed" class="upload-schedule-input-group">
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Tanggal Posting</label>
+                                                    <input type="date" name="fixedDate">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Jam Posting</label>
+                                                    <input type="time" name="fixedTime" value="13:00">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div id="upload-schedule-input-range"
+                                            class="upload-schedule-input-group hidden">
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Tanggal Mulai</label>
+                                                    <input type="date" name="rangeStartDate">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Tanggal Selesai</label>
+                                                    <input type="date" name="rangeEndDate">
+                                                </div>
+                                            </div>
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Mulai Jam</label>
+                                                    <input type="time" name="rangeStart" value="13:00">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Sampai Jam</label>
+                                                    <input type="time" name="rangeEnd" value="17:00">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div id="upload-schedule-input-list" class="upload-schedule-input-group hidden">
+                                            <div class="form-row cols-2">
+                                                <div class="form-group">
+                                                    <label>Tanggal Posting</label>
+                                                    <input type="date" name="listDate">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Jam Spesifik (Pisahkan dg koma)</label>
+                                                    <input type="text" name="listTimes"
+                                                        placeholder="e.g. 13:00, 15:30, 18:45">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 25px; background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);">
+                                    <i class="fas fa-paper-plane"></i> Start Upload Batch
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="logs" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #4ade80;">
+
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <div class="elegant-header"
+                                    style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
+                                    <i class="fas fa-terminal icon-gradient"
+                                        style="background: linear-gradient(135deg, #4ade80, #16a34a); -webkit-background-clip: text; background-clip: text;"></i>
+                                    <div>
+                                        <h2>System Console</h2>
+                                        <p>Pantau proses log dari otomatisasi AI dan video.</p>
+                                    </div>
+                                </div>
+
+                                <button class="btn-secondary"
+                                    onclick="document.getElementById('log-console').innerHTML = ''"
+                                    style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444;">
+                                    <i class="fas fa-trash"></i> Clear Logs
+                                </button>
+                            </div>
+
+                            <div id="log-console" class="log-box">
+                                <pre
+                                    style="margin: 0 0 15px 0; color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.4); font-family: 'JetBrains Mono', monospace;">
+ _____ _               _         
+| __  |_|___ _ _ _____|_|_ _ ___ 
+|    -| |- _| | |     | | | | .'|
+|__|__|_|___|___|_|_|_|_|_  |__,|
+                        |___|    </pre>
+                                <div>> System initialized...</div>
+                                <div>> Ready for commands.</div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div id="settings" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #14b8a6; margin-bottom: 25px;">
+                            <div class="elegant-header">
+                                <i class="fas fa-closed-captioning icon-gradient"
+                                    style="background: linear-gradient(135deg, #5eead4, #0f766e); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Subtitle AI Settings</h2>
+                                    <p>Atur tampilan dan pembagian baris subtitle AI untuk proses berikutnya.</p>
+                                </div>
+                            </div>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label>Font Subtitle</label>
+                                    <input type="text" id="settings-subtitle-font-family" placeholder="Contoh: Poppins">
+                                </div>
+                                <div class="form-group">
+                                    <label>Ukuran Font</label>
+                                    <input type="number" id="settings-subtitle-font-size" min="24" max="140" step="1">
+                                </div>
+                                <div class="form-group">
+                                    <label>Jarak Antar Baris (px)</label>
+                                    <input type="number" id="settings-subtitle-line-spacing" min="-40" max="80"
+                                        step="1">
+                                </div>
+                                <div class="form-group">
+                                    <label>Warna Outline</label>
+                                    <input type="color" id="settings-subtitle-outline-color"
+                                        style="height: 46px; padding: 6px 8px; cursor: pointer;">
+                                </div>
+                                <div class="form-group">
+                                    <label>Max Baris per Subtitle</label>
+                                    <input type="number" id="settings-subtitle-max-lines" min="1" max="2" step="1">
+                                </div>
+                                <div class="form-group">
+                                    <label>Max Kata per Baris</label>
+                                    <input type="number" id="settings-subtitle-max-words" min="1" max="6" step="1">
+                                </div>
+                                <div class="form-group">
+                                    <label>Posisi Subtitle dari Bawah (px)</label>
+                                    <input type="number" id="settings-subtitle-position-bottom" min="20" max="400"
+                                        step="5">
+                                </div>
+                            </div>
+                            <p class="settings-note">Default disarankan: maksimal 2 baris, tiap baris maksimal 3 kata.
+                            </p>
+                            <div id="subtitle-ai-status" class="settings-status settings-status-saved">Tersimpan</div>
+                            <div class="form-row cols-2" style="margin-top: 20px;">
+                                <button type="button" class="btn-secondary" onclick="resetSubtitleAiSettings()"
+                                    style="width: 100%;">
+                                    <i class="fas fa-rotate-left"></i> Reset ke Default
+                                </button>
+                                <button type="button" class="btn-magic" onclick="saveSubtitleAiSettings()"
+                                    style="margin-top: 0; background: linear-gradient(135deg, #2dd4bf, #0f766e); box-shadow: 0 8px 20px rgba(20, 184, 166, 0.3);">
+                                    <i class="fas fa-save"></i> Simpan Pengaturan Subtitle
+                                </button>
+                            </div>
+                        </div>
+                        <div class="elegant-section" style="border-left-color: #6366f1; margin-bottom: 25px;">
+                            <div class="elegant-header">
+                                <i class="fas fa-key icon-gradient"
+                                    style="background: linear-gradient(135deg, #818cf8, #4f46e5); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Gemini AI Settings</h2>
+                                    <p>Konfigurasi API Key untuk fitur AI. (1 key per baris untuk multi-key)</p>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <textarea id="settings-gemini-key" rows="3"
+                                    placeholder="AIzaSy...key1&#10;AIzaSy...key2&#10;AIzaSy...key3"></textarea>
+                            </div>
+                            <button type="button" class="btn-magic" onclick="saveGeminiKey()"
+                                style="margin-top: 15px; background: linear-gradient(135deg, #818cf8, #4f46e5); box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);">
+                                <i class="fas fa-save"></i> Simpan API Key
+                            </button>
+                        </div>
+
+                        <div class="elegant-section" style="border-left-color: #ec4899; margin-bottom: 25px;">
+                            <div class="elegant-header">
+                                <i class="fas fa-microphone-alt icon-gradient"
+                                    style="background: linear-gradient(135deg, #f472b6, #db2777); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>TikTok TTS Settings</h2>
+                                    <p>Digunakan untuk membuat suara AI pada fitur Subtitle.</p>
+                                </div>
+                            </div>
+                            <div class="form-row cols-2">
+                                <div class="form-group">
+                                    <label>TikTok Session ID</label>
+                                    <input type="text" id="settings-tiktok-session"
+                                        placeholder="Dapatkan dari cookie sessionid di tiktok.com">
+                                </div>
+                                <div class="form-group">
+                                    <label>Suara (Voice)</label>
+                                    <select id="settings-tiktok-voice">
+                                        <optgroup label="🇮🇩 Indonesian">
+                                            <option value="id_001">Indonesian - Female (default)</option>
+                                        </optgroup>
+                                        <optgroup label="🇺🇸 English">
+                                            <option value="en_male_narration">Story Teller (Male)</option>
+                                            <option value="en_female_emotional">Peaceful (Female)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-magic" onclick="saveTikTokSettings()"
+                                style="margin-top: 20px; background: linear-gradient(135deg, #f472b6, #db2777); box-shadow: 0 8px 20px rgba(236, 72, 153, 0.3);">
+                                <i class="fas fa-save"></i> Simpan TikTok Settings
+                            </button>
+                        </div>
+
+                        <div class="elegant-section" style="border-left-color: #14b8a6; margin-bottom: 25px;">
+                            <div class="elegant-header">
+                                <i class="fas fa-table icon-gradient"
+                                    style="background: linear-gradient(135deg, #2dd4bf, #0f766e); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Spreadsheet Settings</h2>
+                                    <p>Webhook untuk append/update caption ke Google Sheet.</p>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Spreadsheet Webhook URL</label>
+                                <input type="text" id="settings-spreadsheet-webhook"
+                                    placeholder="https://script.google.com/macros/s/.../exec">
+                            </div>
+                            <button type="button" class="btn-magic" onclick="saveSpreadsheetSettings()"
+                                style="margin-top: 15px; background: linear-gradient(135deg, #2dd4bf, #0f766e); box-shadow: 0 8px 20px rgba(20, 184, 166, 0.3);">
+                                <i class="fas fa-save"></i> Simpan Spreadsheet Settings
+                            </button>
+                        </div>
+
+                        <div class="elegant-section" style="border-left-color: #f59e0b; margin-bottom: 25px;">
+                            <div class="elegant-header">
+                                <i class="fas fa-users-cog icon-gradient"
+                                    style="background: linear-gradient(135deg, #fbd38d, #d97706); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Repliz Account Manager</h2>
+                                    <p>Kelola daftar akun Repliz ID yang akan digunakan secara bergantian.</p>
+                                </div>
+                            </div>
+                            <div class="form-row cols-2" style="margin-bottom: 15px;">
+                                <div class="form-group">
+                                    <label>Nama Akun Baru</label>
+                                    <input type="text" id="new-repliz-name" placeholder="e.g. Akun Utama">
+                                </div>
+                                <div class="form-group">
+                                    <label>ID Akun Baru</label>
+                                    <input type="text" id="new-repliz-id" placeholder="e.g. 12345678">
+                                </div>
+                            </div>
+                            <div class="form-row cols-2" style="margin-bottom: 25px;">
+                                <button type="button" id="repliz-submit-btn" class="btn-magic"
+                                    onclick="addReplizAccount()"
+                                    style="margin-top: 0; background: linear-gradient(135deg, #fbd38d, #d97706); box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);">
+                                    <i class="fas fa-plus"></i> Tambah Akun
+                                </button>
+                                <button type="button" id="repliz-cancel-btn" class="btn-secondary hidden"
+                                    onclick="cancelEditRepliz()" style="width: 100%;">
+                                    <i class="fas fa-xmark"></i> Batal Edit
+                                </button>
+                            </div>
+
+                            <label style="margin-bottom: 10px; display: block;"><i class="fas fa-list"></i> Daftar Akun
+                                Tersimpan</label>
+                            <ul id="repliz-id-list" class="account-list"
+                                style="background: rgba(0,0,0,0.15); border-radius: 8px; border: 1px solid var(--border-color);">
+                            </ul>
+                            <p class="settings-note" style="margin-top: 12px;">Perubahan akun Repliz tidak otomatis
+                                tersimpan. Klik tombol simpan setelah selesai edit.</p>
+                            <div id="repliz-save-status" class="settings-status settings-status-saved"
+                                style="margin-top: 10px;">Tersimpan</div>
+                            <button type="button" class="btn-magic" onclick="saveReplizAccounts()"
+                                style="margin-top: 16px; background: linear-gradient(135deg, #fbd38d, #d97706); box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);">
+                                <i class="fas fa-save"></i> Simpan Daftar Repliz
+                            </button>
+                        </div>
+
+                        <div class="elegant-section" style="border-left-color: #10b981; margin-bottom: 25px;">
+                            <div class="elegant-header">
+                                <i class="fas fa-sliders-h icon-gradient"
+                                    style="background: linear-gradient(135deg, #34d399, #059669); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Brand &amp; Persona Manager</h2>
+                                    <p>Kelola profil brand untuk menghasilkan gaya hook yang spesifik.</p>
+                                </div>
+                            </div>
+
+                            <div class="table-container"
+                                style="margin-bottom: 25px; border-radius: 8px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: auto; max-height: 420px;">
+                                <table class="data-table" id="brand-table">
+                                    <thead>
+                                        <tr>
+                                            <th width="40">No</th>
+                                            <th width="140">Brand Name</th>
+                                            <th width="80" class="text-center">Mode</th>
+                                            <th width="160">Content Focus / Hooks</th>
+                                            <th width="160">Caption Rules</th>
+                                            <th width="80" class="text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="brand-list"></tbody>
+                                </table>
+                            </div>
+
+                            <h3 style="margin-bottom: 15px; font-size: 1rem; color: #10b981;"><i
+                                    class="fas fa-plus-circle"></i> Tambah Brand Baru</h3>
+                            <div class="form-row cols-2" style="margin-bottom: 15px;">
+                                <div class="form-group">
+                                    <label>Nama Brand</label>
+                                    <input type="text" id="new-brand-name" placeholder="Contoh: Kopi Kenangan">
+                                </div>
+                                <div class="form-group">
+                                    <label>Caption Mode</label>
+                                    <select id="new-brand-mode" onchange="toggleStorySourceField()">
+                                        <option value="standard">🏷️ Standard</option>
+                                        <option value="bisnis">🤝 Bisnis</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label>Content Focus / Hooks (Topik)</label>
+                                <textarea id="NewBrandHooks" rows="2"
+                                    placeholder="Tuliskan fokus topik untuk brand ini..."></textarea>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label>Caption Rules</label>
+                                <textarea id="NewBrandCaptionRule" rows="3"
+                                    placeholder="Aturan caption, hashtag wajib, tone, dll..."></textarea>
+                            </div>
+
+                            <div class="form-row cols-2">
+                                <button type="button" id="brand-submit-btn" class="btn-secondary" onclick="addBrand()"
+                                    style="width: 100%;">
+                                    <i class="fas fa-plus"></i> Tambah ke List
+                                </button>
+                                <button type="button" class="btn-magic" onclick="saveBrands()"
+                                    style="margin-top: 0; background: linear-gradient(135deg, #34d399, #059669); box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);">
+                                    <i class="fas fa-save"></i> Simpan Semua Brand
+                                </button>
+                            </div>
+                            <button type="button" id="brand-cancel-btn" class="btn-secondary hidden"
+                                onclick="cancelEditBrand()" style="width: 100%; margin-top: 12px;">
+                                <i class="fas fa-xmark"></i> Batal Edit Brand
+                            </button>
+                        </div>
+
+                        <div class="elegant-section" style="border-left-color: #0ea5e9;">
+                            <div class="elegant-header">
+                                <i class="fas fa-magic icon-gradient"
+                                    style="background: linear-gradient(135deg, #38bdf8, #0369a1); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Default All-In-One Settings</h2>
+                                    <p>Pengaturan default untuk proses Multi-Cut dan Merge pada fitur All-In-One.</p>
+                                </div>
+                            </div>
+
+                            <form id="aio-default-settings-form">
+                                <h3 style="color: var(--primary); font-size: 1rem;"><i class="fas fa-scissors"></i>
+                                    Konfigurasi Potong (Multi-Cut)</h3>
+                                <div class="form-row cols-2">
+                                    <div class="form-group">
+                                        <label>Max Clips</label>
+                                        <input type="number" id="def-mc-maxClips" value="5">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Clip Duration (s)</label>
+                                        <input type="number" id="def-mc-clipDuration" value="2" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-row cols-2">
+                                    <div class="form-group">
+                                        <label>Trim Start</label>
+                                        <input type="text" id="def-mc-trimStart" placeholder="e.g. 00:00:10">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Trim End</label>
+                                        <input type="text" id="def-mc-trimEnd" placeholder="e.g. 00:00:30">
+                                    </div>
+                                </div>
+
+                                <h3 style="color: var(--primary); font-size: 1rem;"><i class="fas fa-link"></i>
+                                    Konfigurasi Gabung (Merge)</h3>
+                                <div class="form-row cols-3">
+                                    <div class="form-group">
+                                        <label>Final Video Count</label>
+                                        <input type="number" id="def-merge-finalCount" value="3">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Max Clips / Source</label>
+                                        <input type="number" id="def-merge-maxPerSource" value="2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Max Sources (0=All)</label>
+                                        <input type="number" id="def-merge-maxSources" value="0">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Merge Mode</label>
+                                    <select id="def-merge-mode">
+                                        <option value="sequential">Sequential</option>
+                                        <option value="random">Random</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Target Durasi Final: <span id="def-merge-finalDuration-display">17
+                                            detik</span></label>
+                                    <input type="range" id="def-merge-finalDuration" min="5" max="60" step="1"
+                                        value="17"
+                                        oninput="document.getElementById('def-merge-finalDuration-display').textContent = this.value + ' detik'">
+                                </div>
+
+                                <button type="button" class="btn-magic" onclick="saveAioDefaults()"
+                                    style="background: linear-gradient(135deg, #38bdf8, #0369a1); box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);">
+                                    <i class="fas fa-save"></i> Simpan Konfigurasi
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <div id="tools" class="main-tab-content">
+            <div class="app-layout">
+
+                <nav class="sidebar">
+                    <ul class="sidebar-menu">
+                        <li data-sub="youtube-downloader" class="active" onclick="openSubTab(this)"><i
+                                class="fas fa-download"></i> YouTube Downloader</li>
+                        <li data-sub="ai-video-analysis" onclick="openSubTab(this)"><i class="fas fa-microscope"></i> AI
+                            Video Analysis</li>
+                        <li data-sub="auto-portrait" onclick="openSubTab(this)"><i class="fas fa-mobile-alt"></i> Batch
+                            Auto Portrait</li>
+                        <li data-sub="compress-video" onclick="openSubTab(this)"><i
+                                class="fas fa-compress-arrows-alt"></i> Kompres Ukuran</li>
+                    </ul>
+                </nav>
+
+                <div class="content-area">
+
+                    <div id="youtube-downloader" class="sub-tab-content active">
+                        <div class="elegant-section" style="border-left-color: #ef4444;">
+                            <div class="elegant-header">
+                                <i class="fas fa-youtube icon-gradient"
+                                    style="background: linear-gradient(135deg, #f87171, #dc2626); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>YouTube Video Downloader</h2>
+                                    <p>Download video atau playlist dari YouTube dengan kualitas terbaik.</p>
+                                </div>
+                            </div>
+                            <form id="youtube-form">
+                                <div class="form-group">
+                                    <label>YouTube URL / Playlist (One per line)</label>
+                                    <textarea name="url" rows="4" required style="resize: vertical;"
+                                        placeholder="https://youtube.com/watch?v=..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Folder Output</label>
+                                    <input type="text" name="outputDir" value="downloads">
+                                </div>
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #f87171, #dc2626); box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);">
+                                    <i class="fas fa-download"></i> Start Download
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="ai-video-analysis" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #a855f7;">
+                            <div class="elegant-header">
+                                <i class="fas fa-microscope icon-gradient"
+                                    style="background: linear-gradient(135deg, #c084fc, #9333ea); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>AI Video Analysis (Gemini)</h2>
+                                    <p>Analisis konten video YouTube secara mendalam menggunakan AI Gemini.</p>
+                                </div>
+                            </div>
+                            <form id="analysis-form">
+                                <div class="form-group">
+                                    <label>YouTube URL</label>
+                                    <input type="text" name="url" placeholder="https://youtube.com/watch?v=..."
+                                        required>
+                                </div>
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #c084fc, #9333ea); box-shadow: 0 8px 20px rgba(147, 51, 234, 0.3);">
+                                    <i class="fas fa-microscope"></i> Start Analysis
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="auto-portrait" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #3b82f6;">
+                            <div class="elegant-header">
+                                <i class="fas fa-sync-alt icon-gradient"
+                                    style="background: linear-gradient(135deg, #60a5fa, #2563eb); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Batch Auto Portrait (-90°)</h2>
+                                    <p>Rotasi otomatis seluruh video landscape di dalam folder menjadi portrait.</p>
+                                </div>
+                            </div>
+                            <form id="rotate-form">
+                                <div class="form-group">
+                                    <label>Folder Sumber Video Landscape</label>
+                                    <input type="text" name="sourceDir" value="sumber_landscape" required>
+                                </div>
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #60a5fa, #2563eb); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);">
+                                    <i class="fas fa-play"></i> Mulai Rotasi & Timpa
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="compress-video" class="sub-tab-content">
+                        <div class="elegant-section" style="border-left-color: #f97316;">
+                            <div class="elegant-header">
+                                <i class="fas fa-compress-arrows-alt icon-gradient"
+                                    style="background: linear-gradient(135deg, #fb923c, #ea580c); -webkit-background-clip: text; background-clip: text;"></i>
+                                <div>
+                                    <h2>Kompres Ukuran Video</h2>
+                                    <p>Perkecil ukuran file video secara massal untuk menghemat ruang penyimpanan.</p>
+                                </div>
+                            </div>
+                            <form id="compress-form">
+                                <div class="form-group">
+                                    <label>Folder Sumber Video</label>
+                                    <input type="text" name="sourceDir" value="sumber_mentahan" required>
+                                </div>
+                                <button type="submit" class="btn-magic"
+                                    style="margin-top: 20px; background: linear-gradient(135deg, #fb923c, #ea580c); box-shadow: 0 8px 20px rgba(234, 88, 12, 0.3);">
+                                    <i class="fas fa-compress"></i> Mulai Kompres & Timpa File Asli
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
