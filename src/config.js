@@ -68,24 +68,6 @@ const config = {
     })(),
     brands: settings.brands || [],
 
-    // --- Repliz Settings ---
-    repliz: {
-        accessKey: settings.repliz_access_key || "",
-        secretKey: settings.repliz_secret_key || "",
-        accountId: (() => {
-            const raw = settings.repliz_account_id;
-            const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-            return arr.map(e => (e && typeof e === 'object' ? e.id : e)).filter(Boolean);
-        })(),
-    },
-
-    // --- Storage Settings ---
-    storage: {
-        webhookUrl: settings.upload_webhook_url || "",
-        publicBaseUrl: settings.upload_public_base_url || "",
-        spreadsheetWebhookUrl: settings.spreadsheet_webhook_url || "",
-    },
-
     // --- Batch Processing Defaults ---
     batch: {
         trimStart: settings.trim_start || "",
@@ -96,4 +78,3 @@ const config = {
 };
 
 module.exports = config;
-

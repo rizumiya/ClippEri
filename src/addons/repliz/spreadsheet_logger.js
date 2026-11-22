@@ -13,7 +13,7 @@ async function appendRowsToCsv(csvPath, rows) {
     const dir = path.dirname(abs);
     await fs.mkdir(dir, { recursive: true });
     let exists = true;
-    try { await fs.access(abs); } catch (_) { exists = false; }
+    try { await fs.access(abs); } catch { exists = false; }
     const header = "timestamp,video,caption\n";
     const body = rows.map((r) => `${escCsv(r.timestamp)},${escCsv(r.video)},${escCsv(r.caption)}`).join("\n") + "\n";
     if (!exists) {

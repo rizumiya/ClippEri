@@ -3,28 +3,37 @@ const fs = require("fs/promises");
 const chalk = require("chalk");
 const inquirer = require("inquirer");
 const { runCommand, getToolCommand, ensureDirectoryExists } = require("../utils/shell");
+const { runEncode } = require("../utils/encoder");
 const { applyHookToFinalVideo } = require("../utils/ffmpeg");
 const { generateHooks, generateCaptions, extractStoryFacts } = require("./ai_hook");
+const { getPersonas, resolvePersona } = require("./personas");
+const { runHooks } = require("./hooks");
 const config = require("../config");
 
 const { getSettings } = require("../utils/settings_manager");
 
-function mapPersonaToCaptionMode(personaKey = "default", fallbackMode = "standard") {
-    const p = String(personaKey || "default").toLowerCase();
-    if (p === "business") return "edukasi_bisnis";
-    if (p === "atomic") return "story";
-    if (p === "current" || p === "default") return fallbackMode;
-    return fallbackMode;
-}
-
-function buildPersonaPlan(count, selectedPersona = "default") {
+function buildPersonaPlan(count, personaKey = "default", customPrompt = "", fallbackMode = "standard") {
     const total = Math.max(0, parseInt(count, 10) || 0);
-    const key = String(selectedPersona || "default").toLowerCase();
-    if (key !== "mixed" && key !== "cycle") {
-        return Array.from({ length: total }, () => key === "current" ? "default" : key);
+    if (customPrompt && String(customPrompt).trim() !== "") {
+        const custom = resolvePersona({ customPrompt });
+        return Array.from({ length: total }, () => custom);
     }
-    const cycle = ["business", "default", "atomic"];
-    return Array.from({ length: total }, (_, i) => cycle[i % cycle.length]);
+
+    const key = String(personaKey || "default").trim().toLowerCase();
+    if (key === "mixed" || key === "cycle") {
+        const all = getPersonas();
+        const pool = all.length > 0 ? all : [resolvePersona({ personaId: "default" })];
+        return Array.from({ length: total }, (_, i) => pool[i % pool.length]);
+    }
+
+    if (key === "current" && fallbackMode && fallbackMode !== "standard") {
+        const mappedId = fallbackMode === "edukasi_bisnis" ? "business" : (fallbackMode === "story" ? "atomic" : "default");
+        const p = resolvePersona({ personaId: mappedId });
+        return Array.from({ length: total }, () => p);
+    }
+
+    const chosen = resolvePersona({ personaId: personaKey || "default" });
+    return Array.from({ length: total }, () => chosen);
 }
 
 async function generateHooksByPersonaPlan({
@@ -34,21 +43,23 @@ async function generateHooksByPersonaPlan({
     brandName = "",
     brandContentHooks = "",
     personaKey = "default",
+    customPrompt = "",
     fallbackCaptionMode = "standard",
     storySummary = ""
 }) {
-    const plan = buildPersonaPlan(count, personaKey);
-    const buckets = {};
+    const plan = buildPersonaPlan(count, personaKey, customPrompt, fallbackCaptionMode);
+    const buckets = new Map();
     plan.forEach((persona, idx) => {
-        if (!buckets[persona]) buckets[persona] = [];
-        buckets[persona].push(idx);
+        if (!buckets.has(persona.id)) {
+            buckets.set(persona.id, { persona, idxs: [] });
+        }
+        buckets.get(persona.id).idxs.push(idx);
     });
+
     const out = Array(plan.length).fill("");
-    for (const persona of Object.keys(buckets)) {
-        const idxs = buckets[persona];
+    for (const { persona, idxs } of buckets.values()) {
         if (!idxs.length) continue;
-        const captionMode = mapPersonaToCaptionMode(persona, fallbackCaptionMode);
-        const generated = await generateHooks(apiKey, context, idxs.length, brandName, brandContentHooks, captionMode, storySummary);
+        const generated = await generateHooks(apiKey, context, idxs.length, brandName, brandContentHooks, persona, storySummary);
         idxs.forEach((targetIdx, i) => { out[targetIdx] = generated[i] || ""; });
     }
     return out;
@@ -62,21 +73,23 @@ async function generateCaptionsByPersonaPlan({
     brandContentHooks = "",
     brandCaptionRule = "",
     personaKey = "default",
+    customPrompt = "",
     fallbackCaptionMode = "standard",
     storySourceContent = "",
     hooksArray = []
 }) {
-    const plan = buildPersonaPlan(count, personaKey);
-    const buckets = {};
+    const plan = buildPersonaPlan(count, personaKey, customPrompt, fallbackCaptionMode);
+    const buckets = new Map();
     plan.forEach((persona, idx) => {
-        if (!buckets[persona]) buckets[persona] = [];
-        buckets[persona].push(idx);
+        if (!buckets.has(persona.id)) {
+            buckets.set(persona.id, { persona, idxs: [] });
+        }
+        buckets.get(persona.id).idxs.push(idx);
     });
+
     const out = Array(plan.length).fill("");
-    for (const persona of Object.keys(buckets)) {
-        const idxs = buckets[persona];
+    for (const { persona, idxs } of buckets.values()) {
         if (!idxs.length) continue;
-        const captionMode = mapPersonaToCaptionMode(persona, fallbackCaptionMode);
         const hooksSubset = idxs.map(idx => hooksArray[idx] || "");
         const generated = await generateCaptions(
             apiKey,
@@ -87,7 +100,7 @@ async function generateCaptionsByPersonaPlan({
             "Akun Bisnis/Brand",
             brandContentHooks,
             brandCaptionRule,
-            captionMode,
+            persona,
             storySourceContent,
             hooksSubset
         );
@@ -104,23 +117,14 @@ function refreshConfig() {
     config.batch.trimEnd = s.trim_end || config.batch.trimEnd;
     config.paths.sourceDir = s.source_folder || config.paths.sourceDir;
     config.paths.audioDir = s.backsound_folder || config.paths.audioDir;
-    config.repliz.accessKey = s.repliz_access_key || config.repliz.accessKey;
-    config.repliz.secretKey = s.repliz_secret_key || config.repliz.secretKey;
-    config.repliz.secretKey = s.repliz_secret_key || config.repliz.secretKey;
-    // Handle account ID as array of {name,id} objects or plain strings — normalize to array of ID strings
-    const rawIds = Array.isArray(s.repliz_account_id) ? s.repliz_account_id : [s.repliz_account_id || config.repliz.accountId];
-    config.repliz.accountId = rawIds.map(entry => (entry && typeof entry === 'object' ? entry.id : entry)).filter(Boolean);
-    config.storage.webhookUrl = s.upload_webhook_url || config.storage.webhookUrl;
-    config.storage.publicBaseUrl = s.upload_public_base_url || config.storage.publicBaseUrl;
-    config.storage.spreadsheetWebhookUrl = s.spreadsheet_webhook_url || config.storage.spreadsheetWebhookUrl;
-    // Normalize gemini_api_key: supports array or newline-separated string
+    config.brands = s.brands || config.brands;
     if (s.gemini_api_key) {
         const raw = s.gemini_api_key;
         let keys = [];
         if (Array.isArray(raw)) {
             keys = raw.map(k => String(k).trim()).filter(Boolean);
         } else {
-            keys = String(raw).split('\n').map(k => k.trim()).filter(Boolean);
+            keys = String(raw).split("\n").map(k => k.trim()).filter(Boolean);
         }
         if (keys.length > 0) {
             config.ai.apiKey = keys[0];
@@ -173,19 +177,18 @@ async function processMultiCut(videoFiles, sourceDir, clipsDir, generalSettings 
 
         if (setting.trimStart || setting.trimEnd) {
             const tempTrim = path.join(clipsDir, `temp_trim_${setting.sourceIndex}.mp4`);
-            let trimCmd = `ffmpeg -y -i "${sourcePath}" `;
-            if (setting.trimStart) trimCmd += `-ss ${setting.trimStart} `;
-            if (setting.trimEnd) trimCmd += `-to ${setting.trimEnd} `;
+            let ssTo = "";
+            if (setting.trimStart) ssTo += `-ss ${setting.trimStart} `;
+            if (setting.trimEnd) ssTo += `-to ${setting.trimEnd} `;
 
             if (fastMode) {
-                // Fast Mode: Stream Copy for trim (Might be inaccurate on start point)
-                trimCmd += `-c copy "${tempTrim}"`;
+                await runCommand(`ffmpeg -y -i "${sourcePath}" ${ssTo}-c copy "${tempTrim}"`);
             } else {
-                // Standard: Re-encode
-                trimCmd += `-vf "${filter}" -r ${fps} -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k -ar 44100 -pix_fmt yuv420p "${tempTrim}"`;
+                await runEncode(
+                    (encArgs) => `ffmpeg -y -i "${sourcePath}" ${ssTo}-vf "${filter}" -r ${fps} ${encArgs} -c:a aac -b:a 128k -ar 44100 "${tempTrim}"`,
+                    { quality: 23, preset: "ultrafast" }
+                );
             }
-
-            await runCommand(trimCmd);
             currentInput = tempTrim;
 
             // Recalculate duration of trimmed video
@@ -209,14 +212,12 @@ async function processMultiCut(videoFiles, sourceDir, clipsDir, generalSettings 
             const outPath = path.join(clipsDir, outName);
 
             if (fastMode) {
-                // Fast Mode: Copy codec, faster but risk of freeze if mixed later
-                // Note: -ss before -i is faster but keyframe dependent. -ss after -i is accurate but slower.
-                // For "Fast Mode" we prioritize speed, so -ss before -i.
-                // -avoid_negative_ts make_zero is good practice.
                 await runCommand(`ffmpeg -y -ss ${start} -t ${clipDur} -i "${currentInput}" -c copy -avoid_negative_ts make_zero "${outPath}" -loglevel error`);
             } else {
-                // Standard: Re-encode with filter
-                await runCommand(`ffmpeg -y -ss ${start} -t ${clipDur} -i "${currentInput}" -vf "${filter}" -r ${fps} -c:v libx264 -c:a aac -avoid_negative_ts make_zero "${outPath}"`);
+                await runEncode(
+                    (encArgs) => `ffmpeg -y -ss ${start} -t ${clipDur} -i "${currentInput}" -vf "${filter}" -r ${fps} ${encArgs} -c:a aac -avoid_negative_ts make_zero "${outPath}"`,
+                    { quality: 23, preset: "fast" }
+                );
             }
         }
         if (currentInput.includes("temp_trim")) await fs.unlink(currentInput).catch(() => { });
@@ -285,8 +286,12 @@ async function performMergeLogic(sourceDir, finalDir, uploadConfig = null) {
     // ── Pre-extract Stories if in Story Mode ────────────────────
     let stories = [];
     const captionMode = uploadConfig ? (uploadConfig.captionMode || 'standard') : 'standard';
+    const personaKey = uploadConfig?.personaId || uploadConfig?.systemPersona || "default";
+    const customPersonaPrompt = uploadConfig?.customPersonaPrompt || "";
+    const activePlan = buildPersonaPlan(finalCount, personaKey, customPersonaPrompt, captionMode);
+    const needsStory = captionMode === 'story' || activePlan.some(p => p.mode === 'story');
 
-    if (captionMode === 'story' && uploadConfig && uploadConfig.storySourceContent) {
+    if (needsStory && uploadConfig && uploadConfig.storySourceContent) {
         refreshConfig();
         const geminiKeys = (config.ai.apiKeys && config.ai.apiKeys.length > 0)
             ? config.ai.apiKeys
@@ -334,7 +339,8 @@ async function performMergeLogic(sourceDir, finalDir, uploadConfig = null) {
             count: finalCount,
             brandName,
             brandContentHooks,
-            personaKey: uploadConfig?.systemPersona || "default",
+            personaKey,
+            customPrompt: customPersonaPrompt,
             fallbackCaptionMode: captionMode,
             storySummary: stories.length > 0 ? stories : ''
         });
@@ -474,7 +480,8 @@ async function performMergeLogic(sourceDir, finalDir, uploadConfig = null) {
                 brandName,
                 brandContentHooks,
                 brandCaptionRule,
-                personaKey: uploadConfig?.systemPersona || "default",
+                personaKey,
+                customPrompt: customPersonaPrompt,
                 fallbackCaptionMode: captionMode,
                 storySourceContent: storyInput,
                 hooksArray: hooks
@@ -499,169 +506,8 @@ async function performMergeLogic(sourceDir, finalDir, uploadConfig = null) {
         }
     }
 
-    const outputMode = String(uploadConfig?.outputMode || "normal").toLowerCase();
-    if (outputMode === "video_caption_sheet" && finalVideos.length > 0) {
-        const { appendRowsToSpreadsheet } = require("../utils/spreadsheet_logger");
-        const { uploadToStorage } = require("../utils/file_uploader");
-        const rows = [];
-
-        for (let i = 0; i < finalVideos.length; i++) {
-            const file = finalVideos[i];
-            const caption = aiCaptions[i] || "Generated by Video Toolkit";
-            const txtPath = path.join(path.dirname(file), `${path.parse(file).name}.txt`);
-            await fs.writeFile(txtPath, caption, "utf8");
-
-            let videoRef = path.resolve(file);
-            try {
-                videoRef = await uploadToStorage(file);
-            } catch (_) { }
-
-            rows.push({
-                timestamp: new Date().toISOString(),
-                video: videoRef,
-                caption
-            });
-        }
-
-        const sheetResult = await appendRowsToSpreadsheet(rows, {
-            webhookUrl: uploadConfig?.spreadsheetWebhookUrl || config.storage.spreadsheetWebhookUrl || "",
-            csvPath: path.join(finalDir, "spreadsheet_log.csv")
-        });
-        console.log(chalk.green(`✅ Output mode spreadsheet tersimpan via ${sheetResult.mode}: ${sheetResult.target}`));
-    }
-
-    // --- AUTO SUBTITLE GENERATION (Added for Super All-In-One) ---
-    if (uploadConfig && uploadConfig.useSubtitles) {
-        console.log(chalk.cyan(`\n🎙️ Memulai proses Auto Subtitle untuk ${finalVideos.length} video...`));
-        const { processSubtitleForFolderCore } = require('./subtitle');
-        const currentSettings = getSettings();
-        const voice = currentSettings.tiktok_voice || 'id_001';
-
-        // Use finalDir as both source and destination because we want to apply subtitles onto the already merged/hooked videos.
-        // Wait, processSubtitleForFolderCore writes to a new folder. It's safer to create a temp folder.
-        const subtitleTempDir = path.join(finalDir, "_temp_subtitled");
-        await ensureDirectoryExists(subtitleTempDir);
-
-        try {
-            await processSubtitleForFolderCore(finalDir, subtitleTempDir, uploadConfig.captionContext, voice, uploadConfig.srtWavDir);
-
-            const subbedFiles = await fs.readdir(subtitleTempDir);
-            const validSubbedFiles = subbedFiles.filter(f => f.endsWith('.mp4'));
-            const updatedFinalVideos = [];
-
-            for (const originalFile of finalVideos) {
-                const originalBase = path.basename(originalFile, path.extname(originalFile));
-                const expectedSubFile = `${originalBase}_subtitled.mp4`;
-                const matchedSubFile = validSubbedFiles.find(f => f === expectedSubFile);
-
-                if (!matchedSubFile) {
-                    updatedFinalVideos.push(originalFile);
-                    continue;
-                }
-
-                const tempPath = path.join(subtitleTempDir, matchedSubFile);
-                await fs.copyFile(tempPath, originalFile);
-                updatedFinalVideos.push(originalFile);
-            }
-
-            finalVideos = updatedFinalVideos;
-
-            console.log(chalk.green("✅ Proses Auto Subtitle selesai dan menimpa file asli."));
-        } catch (e) {
-            console.log(chalk.red(`❌ Gagal merender Subtitle: ${e.message}`));
-        } finally {
-            // Clean temp subtitle dir
-            try { await fs.rm(subtitleTempDir, { recursive: true, force: true }); } catch (e) { }
-        }
-    }
-
-
-    // --- REPLIZ AUTO UPLOAD (Automated) ---
-    if (uploadConfig && uploadConfig.replizConfig) {
-        const { scheduleTimes } = uploadConfig;
-        const { scheduleReplizVideo } = require("../utils/repliz_api");
-        const { uploadToStorage } = require("../utils/file_uploader");
-
-        console.log(chalk.cyan(`\n📤 Memulai proses upload otomatis ke Repliz untuk ${finalVideos.length} video...`));
-
-        // Round-Robin Logic Prep
-        const selectedAccountIds = Array.isArray(uploadConfig.selectedReplizAccountIds)
-            ? uploadConfig.selectedReplizAccountIds.filter(Boolean)
-            : [];
-        const accountIds = selectedAccountIds.length > 0
-            ? selectedAccountIds
-            : ((Array.isArray(config.repliz.accountId) && config.repliz.accountId.length > 0)
-                ? config.repliz.accountId
-                : (config.repliz.accountId ? [config.repliz.accountId] : []));
-
-        if (accountIds.length === 0) {
-            console.log(chalk.red("❌ Tidak ada Repliz Account ID yang dikonfigurasi. Upload dibatalkan."));
-            return;
-        }
-
-        // Check for limit warning (Mock check: if total videos / numAccounts > 20)
-        // Or simply check if we are scheduling more than 20 for any single account
-        const videosPerAccount = Math.ceil(finalVideos.length / accountIds.length);
-        if (videosPerAccount > 20) {
-            console.log(chalk.yellow.bold(`\n⚠️  PERINGATAN: Estimasi ${videosPerAccount} video per akun. Batas aman API Repliz mungkin terlampaui (Max 10-20/jam).`));
-        }
-
-        const usageCounter = {};
-        accountIds.forEach(id => usageCounter[id] = 0);
-
-        for (let i = 0; i < finalVideos.length; i++) {
-            const file = finalVideos[i];
-            const sched = scheduleTimes[i] || scheduleTimes[0];
-            const caption = aiCaptions[i] || "Generated by Video Toolkit";
-
-            // Round-Robin Selection
-            const accountId = accountIds[i % accountIds.length];
-            usageCounter[accountId]++;
-
-            // Per-Loop Warning (optional, but requested "warn if video > 20 for 1 account id")
-            if (usageCounter[accountId] > 20) {
-                console.log(chalk.red.bold(`⚠️  PERINGATAN SISIPAN: Akun ${accountId} telah mencapai limit 20 video! API mungkin menolak.`));
-            } else if (usageCounter[accountId] > 10) {
-                console.log(chalk.yellow(`⚠️  Info: Akun ${accountId} telah antri ${usageCounter[accountId]} video.`));
-            }
-
-            try {
-                console.log(chalk.cyan(`\n[${i + 1}/${finalVideos.length}] Menangani: ${path.basename(file)}`));
-                console.log(chalk.blue(`   👤 Menggunakan Akun Repliz: ${accountId} (Antrian #${usageCounter[accountId]})`));
-
-                // 1. Upload ke storage public
-                const publicUrl = await uploadToStorage(file);
-
-                // 2. Schedule ke Repliz
-                let finalSched = new Date(sched);
-                if (!finalSched || isNaN(finalSched.getTime())) {
-                    console.log(chalk.red(`   > Skipping Repliz: Waktu tidak valid untuk ${file}`));
-                    continue;
-                }
-
-                // If date+time is in the past, set to NOW to force immediate upload
-                if (finalSched < new Date()) {
-                    console.log(chalk.yellow(`   > Waktu ${finalSched.toLocaleString()} sudah lewat. Upload SEKARANG.`));
-                    finalSched = new Date();
-                    finalSched.setSeconds(finalSched.getSeconds() + 10); // Buffer 10s
-                }
-
-                console.log(chalk.yellow(`   > Menjadwalkan di Repliz untuk: ${finalSched.toLocaleString()}`));
-                await scheduleReplizVideo(config.repliz.accessKey, config.repliz.secretKey, {
-                    title: `Video Content - ${path.basename(file)}`,
-                    description: caption,
-                    videoUrl: publicUrl,
-                    accountId: accountId,
-                    scheduleAt: finalSched
-                });
-            } catch (e) {
-                console.log(chalk.red(`❌ Gagal upload/jadwal untuk ${file}: ${e.message}`));
-            }
-        }
-    } else if (!uploadConfig && config.repliz.accessKey && config.repliz.secretKey) {
-        // Fallback or old manual path if needed
-        console.log(chalk.gray("\nℹ️  Lewati upload otomatis (Gunakan menu 2 untuk full otomatis)."));
-    }
+    await runHooks("afterMergeMedia", { finalVideos, finalDir, hooks, captions: aiCaptions, uploadConfig });
+    await runHooks("afterMerge", { finalVideos, finalDir, hooks, captions: aiCaptions, uploadConfig });
 }
 
 /**
@@ -691,7 +537,7 @@ function parseTime(timeStr, dateStr = null) {
  * Digunakan oleh multiFileCutAndMerge dan mergeOnly agar alurnya seragam.
  */
 async function collectUploadConfig() {
-    console.log(chalk.magenta.bold("\n--- Pengaturan Gabung & Upload ---"));
+    console.log(chalk.magenta.bold("\n--- Pengaturan Gabung ---"));
     const mergeSettings = await inquirer.prompt([
         { type: "number", name: "finalCount", message: "Berapa banyak video akhir yang ingin dihasilkan?", default: 3 },
         { type: "number", name: "maxPerSource", message: "Maks klip per sumber video dalam 1 hasil akhir?", default: 2 },
@@ -715,108 +561,20 @@ async function collectUploadConfig() {
         hookContext = context;
     }
 
-    let uploadConfig = null;
-    if (config.repliz.accessKey && config.repliz.secretKey) {
-        const { wantUpload, useCaptions } = await inquirer.prompt([
-            { type: "confirm", name: "wantUpload", message: "Otomatis Upload ke Repliz setelah selesai?", default: true },
-            { type: "confirm", name: "useCaptions", message: "Gunakan AI untuk generate Caption (Deskripsi) Repliz?", default: true, when: (ans) => ans.wantUpload }
-        ]);
-        if (wantUpload) {
-            const { scheduleMode } = await inquirer.prompt([
-                {
-                    type: "list",
-                    name: "scheduleMode",
-                    message: "Pilih Mode Penjadwalan Repliz:",
-                    choices: [
-                        { name: "1. Waktu Pasti (Sama untuk semua)", value: "fixed" },
-                        { name: "2. Rentang Waktu (Acak didalam rentang)", value: "range" },
-                        { name: "3. Daftar Waktu Spesifik (Pemisah koma)", value: "list" }
-                    ]
-                }
-            ]);
-
-            let scheduleTimes = [];
-            const now = new Date();
-            const todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-            const count = mergeSettings.finalCount;
-
-            if (scheduleMode === "fixed") {
-                const { date, time } = await inquirer.prompt([
-                    { type: "input", name: "date", message: "Tanggal (YYYY-MM-DD, kosongkan = hari ini):", default: "" },
-                    { type: "input", name: "time", message: "Jam (e.g. 13:00):", default: "13:00" }
-                ]);
-                const d = parseTime(time, date || todayStr);
-                if (!d) {
-                    console.log(chalk.red("⚠️ Format jam tidak valid. Penjadwalan dibatalkan."));
-                    return null;
-                }
-                for (let i = 0; i < count; i++) scheduleTimes.push(new Date(d));
-
-            } else if (scheduleMode === "range") {
-                const { date, start, end } = await inquirer.prompt([
-                    { type: "input", name: "date", message: "Tanggal rentang (YYYY-MM-DD, kosongkan = hari ini):", default: "" },
-                    { type: "input", name: "start", message: "Dari Jam:", default: "13:00" },
-                    { type: "input", name: "end", message: "Sampai Jam:", default: "17:00" }
-                ]);
-                const baseDate = date || todayStr;
-                const sd = parseTime(start, baseDate);
-                const ed = parseTime(end, baseDate);
-                if (!sd || !ed) {
-                    console.log(chalk.red("⚠️ Format jam tidak valid. Penjadwalan dibatalkan."));
-                    return null;
-                }
-                if (ed <= sd) ed.setDate(ed.getDate() + 1); // lewat tengah malam
-                const diff = ed.getTime() - sd.getTime();
-                for (let i = 0; i < count; i++) {
-                    scheduleTimes.push(new Date(sd.getTime() + Math.random() * diff));
-                }
-                scheduleTimes.sort((a, b) => a - b);
-
-            } else if (scheduleMode === "list") {
-                const { date, listStr } = await inquirer.prompt([
-                    { type: "input", name: "date", message: "Tanggal (YYYY-MM-DD, kosongkan = hari ini):", default: "" },
-                    { type: "input", name: "listStr", message: `Masukkan ${count} jam (e.g. 13:00, 15:00...):` }
-                ]);
-                const baseDate = date || todayStr;
-                const list = listStr.split(",").map(s => s.trim());
-                for (const t of list) {
-                    const d = parseTime(t, baseDate);
-                    if (d) scheduleTimes.push(d);
-                }
-                if (scheduleTimes.length === 0) {
-                    console.log(chalk.red("⚠️ Tidak ada waktu valid. Penjadwalan dibatalkan."));
-                    return null;
-                }
-            }
-            if (useCaptions && !hookContext) {
-                const { context } = await inquirer.prompt([{ type: "input", name: "context", message: "Konteks Video (untuk AI Caption):" }]);
-                hookContext = context;
-            }
-            uploadConfig = { mergeSettings, musicAns, hookContext, replizConfig: true, scheduleTimes, useCaptions };
-        } else {
-            // User tidak mau upload, tapi tetap return mergeSettings untuk menghindari duplikasi prompt
-            uploadConfig = { mergeSettings, musicAns, hookContext, replizConfig: false };
-        }
-    } else {
-        // Repliz belum dikonfigurasi, tetap return mergeSettings
-        uploadConfig = { mergeSettings, musicAns, hookContext, replizConfig: false };
-    }
-    return uploadConfig;
+    return { mergeSettings, musicAns, hookContext };
 }
 
 
 // --- HELPER: STANDARDIZE VIDEO ---
 async function standardizeVideo(inputPath, outputPath) {
     const { width, height, fps } = config.video.standardization;
-    // Fix: Ensure even dimensions after scaling to prevent "pad" errors
-    // Fix Color Shift: Re-map color matrix to prevent DSLR videos from looking reddish
     const filter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,colormatrix=bt601:bt709`;
 
-    // Gunakan ffmpeg untuk re-encode
-    // -r sets frame rate
-    const cmd = `ffmpeg -y -i "${inputPath}" -vf "${filter}" -r ${fps} -c:v libx264 -preset fast -crf 26 -c:a aac -ar 44100 -ac 2 "${outputPath}"`;
     try {
-        await runCommand(cmd);
+        await runEncode(
+            (encArgs) => `ffmpeg -y -i "${inputPath}" -vf "${filter}" -r ${fps} ${encArgs} -c:a aac -ar 44100 -ac 2 "${outputPath}"`,
+            { quality: 26, preset: "fast" }
+        );
     } catch (e) {
         throw new Error(`Gagal standarisasi video ${path.basename(inputPath)}: ${e.message}`);
     }
@@ -914,7 +672,7 @@ async function mixExternalClips() {
 
 
 // --- CORE LOGIC: HOOK GENERATOR (CORE) ---
-async function processHooksForFolderCore(sourceDir, finalDir, context, geminiKey, brandName = "", brandContentHooks = "", captionMode = "standard", storySummary = "", useCaptions = false, personaKey = "default", hookTimingMode = "full", hookStartTime = null, hookDuration = null) {
+async function processHooksForFolderCore(sourceDir, finalDir, context, geminiKey, brandName = "", brandContentHooks = "", captionMode = "standard", storySummary = "", useCaptions = false, personaKey = "default", hookTimingMode = "full", hookStartTime = null, hookDuration = null, customPersonaPrompt = "") {
     await ensureDirectoryExists(finalDir);
 
     const files = await fs.readdir(sourceDir);
@@ -925,7 +683,7 @@ async function processHooksForFolderCore(sourceDir, finalDir, context, geminiKey
         return;
     }
 
-    console.log(chalk.cyan(`\n🤖 Meng-generate ${videoFiles.length} hook (Mode: ${captionMode}) dengan AI...`));
+    console.log(chalk.cyan(`\n🤖 Meng-generate ${videoFiles.length} hook (Persona: ${customPersonaPrompt ? "Custom" : personaKey}) dengan AI...`));
     const hooks = await generateHooksByPersonaPlan({
         apiKey: geminiKey,
         context,
@@ -933,6 +691,7 @@ async function processHooksForFolderCore(sourceDir, finalDir, context, geminiKey
         brandName,
         brandContentHooks,
         personaKey,
+        customPrompt: customPersonaPrompt,
         fallbackCaptionMode: captionMode,
         storySummary
     });
@@ -994,6 +753,7 @@ async function processHooksForFolderCore(sourceDir, finalDir, context, geminiKey
             brandContentHooks,
             brandCaptionRule,
             personaKey,
+            customPrompt: customPersonaPrompt,
             fallbackCaptionMode: captionMode,
             storySourceContent: storySummary,
             hooksArray: hooks
@@ -1079,154 +839,6 @@ async function processHooksForFolder() {
     }
 
     await processHooksForFolderCore(sourceDir, finalDir, context, geminiKey, "", "", "standard", "", false, "default", hookTimingChoice, hookStartTime, hookDuration);
-}
-
-// --- CORE LOGIC: STANDALONE REPLIZ UPLOAD ---
-async function processStandaloneUpload(uploadDir, scheduleSettings) {
-    refreshConfig();
-    let { scheduleTimes } = scheduleSettings;
-    const { scheduleReplizVideo } = require("../utils/repliz_api");
-    const { uploadToStorage } = require("../utils/file_uploader");
-
-    console.log(chalk.magenta.bold(`\n--- Memulai Upload Repliz Standalone dari: ${uploadDir} ---`));
-
-    if (!(await fs.stat(uploadDir).catch(() => false))) {
-        throw new Error(`Folder tidak ditemukan: ${uploadDir}`);
-    }
-
-    const files = await fs.readdir(uploadDir);
-    const videoFiles = files.filter(f => f.endsWith(".mp4")).map(f => path.join(uploadDir, f));
-
-    if (videoFiles.length === 0) {
-        throw new Error("Tidak ada file .mp4 di folder tersebut.");
-    }
-
-    if ((!scheduleTimes || scheduleTimes.length === 0) && scheduleSettings.scheduleMode === "range") {
-        const today = new Date();
-        const todayStr = today.toISOString().split("T")[0];
-        const startDate = new Date(`${scheduleSettings.rangeStartDate || todayStr}T00:00:00`);
-        const endDate = new Date(`${scheduleSettings.rangeEndDate || scheduleSettings.rangeStartDate || todayStr}T00:00:00`);
-        const parseMinutes = (value, fallback) => {
-            const source = value || fallback;
-            const [h, m] = String(source).split(":").map(Number);
-            return ((Number.isFinite(h) ? h : 0) * 60) + (Number.isFinite(m) ? m : 0);
-        };
-        const startMinutes = parseMinutes(scheduleSettings.rangeStart, "13:00");
-        const endMinutes = parseMinutes(scheduleSettings.rangeEnd, "17:00");
-        const safeStartMinutes = Math.min(startMinutes, endMinutes);
-        const safeEndMinutes = Math.max(startMinutes, endMinutes);
-        const dates = [];
-
-        for (let cursor = new Date(startDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
-            dates.push(new Date(cursor));
-        }
-
-        const totalDays = Math.max(1, dates.length);
-        const basePerDay = Math.floor(videoFiles.length / totalDays);
-        const extra = videoFiles.length % totalDays;
-        scheduleTimes = [];
-
-        dates.forEach((day, dayIndex) => {
-            const itemsForDay = basePerDay + (dayIndex < extra ? 1 : 0);
-            if (itemsForDay <= 0) return;
-
-            const totalWindow = Math.max(1, safeEndMinutes - safeStartMinutes);
-            const step = totalWindow / itemsForDay;
-
-            for (let itemIndex = 0; itemIndex < itemsForDay; itemIndex += 1) {
-                const minuteOffset = safeStartMinutes + Math.floor((itemIndex + 0.5) * step);
-                const scheduled = new Date(day);
-                scheduled.setHours(0, 0, 0, 0);
-                scheduled.setMinutes(Math.min(safeEndMinutes, minuteOffset));
-                scheduleTimes.push(scheduled);
-            }
-        });
-    }
-
-    let captionsMap = {};
-    const captionsPath = path.join(uploadDir, "captions.json");
-    if (await fs.stat(captionsPath).catch(() => false)) {
-        try {
-            const rawCaptions = await fs.readFile(captionsPath, 'utf8');
-            captionsMap = JSON.parse(rawCaptions);
-            console.log(chalk.green(`✅ Berhasil memuat captions.json`));
-        } catch (e) {
-            console.log(chalk.yellow(`⚠️ Gagal mem-parsing captions.json, menggunakan caption default. Error: ${e.message}`));
-        }
-    } else {
-        console.log(chalk.yellow(`⚠️ File captions.json tidak ditemukan, menggunakan caption default.`));
-    }
-
-    // Round-Robin Logic Prep
-    const selectedAccountIds = Array.isArray(scheduleSettings.selectedReplizAccountIds)
-        ? scheduleSettings.selectedReplizAccountIds.filter(Boolean)
-        : [];
-    const accountIds = selectedAccountIds.length > 0
-        ? selectedAccountIds
-        : ((Array.isArray(config.repliz.accountId) && config.repliz.accountId.length > 0)
-            ? config.repliz.accountId
-            : (config.repliz.accountId ? [config.repliz.accountId] : []));
-
-    if (accountIds.length === 0) {
-        throw new Error("Tidak ada Repliz Account ID yang dikonfigurasi di Settings.");
-    }
-
-    const videosPerAccount = Math.ceil(videoFiles.length / accountIds.length);
-    if (videosPerAccount > 20) {
-        console.log(chalk.yellow.bold(`\n⚠️  PERINGATAN: Estimasi ${videosPerAccount} video per akun. Batas aman API Repliz mungkin terlampaui (Max 10-20/jam).`));
-    }
-
-    const usageCounter = {};
-    accountIds.forEach(id => usageCounter[id] = 0);
-
-    for (let i = 0; i < videoFiles.length; i++) {
-        const file = videoFiles[i];
-        const baseName = path.basename(file);
-        const sched = scheduleTimes[i] || scheduleTimes[0];
-
-        let captionData = captionsMap[baseName];
-        let caption = (typeof captionData === 'object' && captionData !== null) ? captionData.caption : captionData;
-        caption = caption || "Video Content - Please Add Caption";
-
-        const accountId = accountIds[i % accountIds.length];
-        usageCounter[accountId]++;
-
-        if (usageCounter[accountId] > 20) {
-            console.log(chalk.red.bold(`⚠️  PERINGATAN SISIPAN: Akun ${accountId} telah mencapai limit 20 video! API mungkin menolak.`));
-        } else if (usageCounter[accountId] > 10) {
-            console.log(chalk.yellow(`⚠️  Info: Akun ${accountId} telah antri ${usageCounter[accountId]} video.`));
-        }
-
-        try {
-            console.log(chalk.cyan(`\n[${i + 1}/${videoFiles.length}] Menangani: ${baseName}`));
-            console.log(chalk.blue(`   👤 Menggunakan Akun Repliz: ${accountId} (Antrian #${usageCounter[accountId]})`));
-
-            const publicUrl = await uploadToStorage(file);
-
-            let finalSched = new Date(sched);
-            if (!finalSched || isNaN(finalSched.getTime())) {
-                console.log(chalk.red(`   > Skipping Repliz: Waktu tidak valid untuk ${file}`));
-                continue;
-            }
-
-            if (finalSched < new Date()) {
-                console.log(chalk.yellow(`   > Waktu ${finalSched.toLocaleString()} sudah lewat. Upload SEKARANG.`));
-                finalSched = new Date();
-                finalSched.setSeconds(finalSched.getSeconds() + 10);
-            }
-
-            console.log(chalk.yellow(`   > Menjadwalkan di Repliz untuk: ${finalSched.toLocaleString()}`));
-            await scheduleReplizVideo(config.repliz.accessKey, config.repliz.secretKey, {
-                title: `Video Content - ${baseName}`,
-                description: caption,
-                videoUrl: publicUrl,
-                accountId: accountId,
-                scheduleAt: finalSched
-            });
-        } catch (e) {
-            console.log(chalk.red(`❌ Gagal upload/jadwal untuk ${file}: ${e.message}`));
-        }
-    }
 }
 
 // --- CORE LOGIC: MULTI-FILE CUT AND MERGE ---
@@ -1378,13 +990,12 @@ async function rotateVideosToPortrait(guiSourceDir = null) {
         const tempPath = path.join(sourceDir, tempName);
 
         console.log(chalk.gray(`\n[${i + 1}/${videoFiles.length}] Merotasi (Pixel / Hard Render): ${file}`));
-        // Kenapa tidak pakai metadata? Karena metadata rotasi seringkali diabaikan oleh video player (termasuk Windows)
-        // dan bisa bikin berantakan saat diedit lagi pakai Premiere atau dipotong lagi pakai FFmpeg.
-        // Solusinya: Kita render pixelnya secara fisik, TAPI menggunakan preset "ultrafast" agar proses sangat cepat dan CPU ringan.
-        const cmd = `ffmpeg -y -i "${inputPath}" -vf "transpose=2" -c:v libx264 -preset ultrafast -crf 23 -c:a copy "${tempPath}"`;
 
         try {
-            await runCommand(cmd);
+            await runEncode(
+                (encArgs) => `ffmpeg -y -i "${inputPath}" -vf "transpose=2" ${encArgs} -c:a copy "${tempPath}"`,
+                { quality: 23, preset: "ultrafast" }
+            );
 
             // Timpa file aslinya
             await fs.unlink(inputPath).catch(() => { });
@@ -1400,23 +1011,46 @@ async function rotateVideosToPortrait(guiSourceDir = null) {
     console.log(chalk.green.bold("\n🎉 Semua proses rotasi selesai!"));
 }
 
-// --- CORE LOGIC: BATCH COMPRESS VIDEO ---
+function getAudioCompressArgs(ext) {
+    switch (ext) {
+        case ".mp3":
+            return "-c:a libmp3lame -b:a 128k";
+        case ".m4a":
+        case ".aac":
+            return "-c:a aac -b:a 128k";
+        case ".wav":
+            return "-ac 1 -ar 22050 -c:a pcm_s16le";
+        case ".flac":
+            return "-c:a flac -compression_level 8";
+        case ".ogg":
+            return "-c:a libvorbis -q:a 4";
+        default:
+            return "-c:a aac -b:a 128k";
+    }
+}
+
+function formatBytesKB(bytes) {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+// --- CORE LOGIC: BATCH COMPRESS VIDEO & AUDIO ---
 async function compressVideos(guiSourceDir = null) {
-    console.log(chalk.magenta.bold("\n--- 🗜️ Kompresi Ukuran Video (Timpa Asli) ---"));
+    console.log(chalk.magenta.bold("\n--- 🗜️ Kompresi Ukuran Video & Audio (Timpa Asli) ---"));
     console.log(chalk.bgRed.white(" ⚠️ PERINGATAN! ⚠️ "));
-    console.log(chalk.red("Fitur ini akan MENIMPA video aslinya secara permanen."));
-    console.log(chalk.red("Pastikan kamu mencoba compress 1 video copy-an dulu sebelum memproses 1 folder penuh!\n"));
+    console.log(chalk.red("Fitur ini akan MENIMPA file aslinya secara permanen jika ukuran hasil kompresi lebih kecil."));
+    console.log(chalk.red("Pastikan kamu mencoba compress 1 file copy-an dulu sebelum memproses 1 folder penuh!\n"));
 
     let sourceDir = guiSourceDir;
 
     if (!sourceDir) {
         const answers = await inquirer.prompt([
-            { type: "input", name: "src", message: "Folder Sumber Video Besar:", default: "sumber_mentahan" }
+            { type: "input", name: "src", message: "Folder Sumber Video / Audio:", default: "sumber_mentahan" }
         ]);
         sourceDir = answers.src;
 
         const confirm = await inquirer.prompt([
-            { type: "confirm", name: "proceed", message: "Apakah kamu YAKIN ingin menimpa asli semua video di folder ini?", default: false }
+            { type: "confirm", name: "proceed", message: "Apakah kamu YAKIN ingin mengompres & menimpa file di folder ini?", default: false }
         ]);
         if (!confirm.proceed) {
             return console.log(chalk.yellow("Dibatalkan."));
@@ -1427,38 +1061,56 @@ async function compressVideos(guiSourceDir = null) {
         return console.log(chalk.red(`❌ Folder sumber tidak ditemukan: ${sourceDir}`));
     }
 
-    const files = await fs.readdir(sourceDir);
-    const videoFiles = files.filter(f => [".mp4", ".mkv", ".mov"].includes(path.extname(f).toLowerCase()));
+    const videoExts = [".mp4", ".mkv", ".mov"];
+    const audioExts = [".mp3", ".m4a", ".wav", ".aac", ".flac", ".ogg"];
+    const supportedExts = [...videoExts, ...audioExts];
 
-    if (videoFiles.length === 0) {
-        return console.log(chalk.red("❌ Tidak ada video di folder tersebut."));
+    const files = await fs.readdir(sourceDir);
+    const mediaFiles = files.filter(f =>
+        !f.startsWith("temp_compress_") && supportedExts.includes(path.extname(f).toLowerCase())
+    );
+
+    if (mediaFiles.length === 0) {
+        return console.log(chalk.red("❌ Tidak ada file video atau audio yang didukung di folder tersebut."));
     }
 
-    console.log(chalk.cyan(`\nMemulai kompresi ${videoFiles.length} video (Ini akan menimpa file asli)...`));
+    console.log(chalk.cyan(`\nMemulai kompresi ${mediaFiles.length} file (Ini akan menimpa file asli jika lebih kecil)...`));
 
-    for (let i = 0; i < videoFiles.length; i++) {
-        const file = videoFiles[i];
+    for (let i = 0; i < mediaFiles.length; i++) {
+        const file = mediaFiles[i];
         const inputPath = path.join(sourceDir, file);
+        const ext = path.extname(file).toLowerCase();
+        const isAudio = audioExts.includes(ext);
 
-        // Buat file temporary di folder yang sama
         const tempName = `temp_compress_${Date.now()}_${file}`;
         const tempPath = path.join(sourceDir, tempName);
 
-        console.log(chalk.gray(`\n[${i + 1}/${videoFiles.length}] Mengkompres: ${file}`));
-        // Menggunakan libx264, preset veryfast, crf 28 untuk kompresi size efektif tanpa turun resolusi
-        const cmd = `ffmpeg -y -i "${inputPath}" -c:v libx264 -preset veryfast -crf 28 -c:a aac -b:a 128k "${tempPath}"`;
+        console.log(chalk.gray(`\n[${i + 1}/${mediaFiles.length}] Mengkompres (${isAudio ? "Audio" : "Video"}): ${file}`));
 
         try {
-            await runCommand(cmd);
+            const origStat = await fs.stat(inputPath);
+            if (isAudio) {
+                const audioArgs = getAudioCompressArgs(ext);
+                await runCommand(`ffmpeg -y -i "${inputPath}" -vn ${audioArgs} "${tempPath}"`);
+            } else {
+                await runEncode(
+                    (encArgs) => `ffmpeg -y -i "${inputPath}" ${encArgs} -c:a aac -b:a 128k "${tempPath}"`,
+                    { quality: 28, preset: "veryfast" }
+                );
+            }
 
-            // Timpa file aslinya
-            await fs.unlink(inputPath).catch(() => { });
-            await fs.rename(tempPath, inputPath);
-
-            console.log(chalk.green(`   ✅ Selesai: ${file}`));
+            const tempStat = await fs.stat(tempPath);
+            if (tempStat.size > 0 && tempStat.size < origStat.size) {
+                await fs.unlink(inputPath).catch(() => { });
+                await fs.rename(tempPath, inputPath);
+                const savedPct = (((origStat.size - tempStat.size) / origStat.size) * 100).toFixed(1);
+                console.log(chalk.green(`   ✅ Selesai: ${file} (${formatBytesKB(origStat.size)} → ${formatBytesKB(tempStat.size)}, hemat ${savedPct}%)`));
+            } else {
+                await fs.unlink(tempPath).catch(() => { });
+                console.log(chalk.yellow(`   ⏭️  Dilewati (tidak lebih kecil): ${file} (${formatBytesKB(origStat.size)} → ${formatBytesKB(tempStat.size)})`));
+            }
         } catch (e) {
             console.log(chalk.red(`   ❌ Gagal: ${e.message}`));
-            // Hapus file temporary jika gagal
             await fs.unlink(tempPath).catch(() => { });
         }
     }
@@ -1475,6 +1127,5 @@ module.exports = {
     processMultiCut,
     performMergeLogic,
     processHooksForFolderCore,
-    processStandaloneUpload,
     compressVideos
 };

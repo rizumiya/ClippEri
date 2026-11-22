@@ -60,41 +60,12 @@ async function settingsMenu() {
       name: "clip_duration",
       message: "Durasi per Klip (Detik, contoh: 2.5):",
       default: currentSettings.clip_duration
-    },
-    {
-      type: "input",
-      name: "repliz_access_key",
-      message: "Repliz Access Key:",
-      default: currentSettings.repliz_access_key
-    },
-    {
-      type: "input",
-      name: "repliz_secret_key",
-      message: "Repliz Secret Key:",
-      default: currentSettings.repliz_secret_key
-    },
-    {
-      type: "input",
-      name: "repliz_account_id",
-      message: "Repliz Account ID:",
-      default: currentSettings.repliz_account_id
-    },
-    {
-      type: "input",
-      name: "upload_webhook_url",
-      message: "Upload Webhook URL (Binary Upload):",
-      default: currentSettings.upload_webhook_url
-    },
-    {
-      type: "input",
-      name: "upload_public_base_url",
-      message: "Upload Public Base URL (URL Akhir):",
-      default: currentSettings.upload_public_base_url
-    },
+    }
   ]);
 
-  if (saveSettings(answers)) {
-    console.log(chalk.green("\n✅ Pengaturan berhasil disimpan!"));
+  if (saveSettings({ ...currentSettings, ...answers })) {
+    console.log(chalk.green("\n✅ Pengaturan umum berhasil disimpan!"));
+    console.log(chalk.gray("ℹ️  Pengaturan addon (seperti Repliz / TTS) dikelola lewat GUI -> Pengaturan -> Addons."));
   } else {
     console.log(chalk.red("\n❌ Gagal menyimpan pengaturan."));
   }
@@ -123,7 +94,7 @@ async function mainMenu() {
           { name: "4. Generator Hook AI (Folder)", value: "hooks" },
           { name: "5. Mix Clip External + Internal", value: "mix_external" },
           { name: "6. [Tools] Rotasi Video ke Portrait (-90°)", value: "rotate_portrait" },
-          { name: "7. [Tools] Kompres Ukuran Video", value: "compress_video" },
+          { name: "7. [Tools] Kompres Ukuran (Video & Audio)", value: "compress_video" },
           { name: "8. Pengaturan Umum", value: "settings" },
           new inquirer.Separator(),
           { name: "9. Buka Versi Web (GUI)", value: "gui" },

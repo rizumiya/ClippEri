@@ -1,0 +1,58 @@
+<div class="view-header">
+    <div>
+        <h1>TikTok TTS & Narasi AI</h1>
+        <p class="view-desc">Addon generate naskah monolog Gemini + voiceover TikTok TTS, atau sinkronisasi SRT & WAV eksternal.</p>
+    </div>
+</div>
+
+<div class="stack-md">
+    <form id="tts-run-form" class="card stack-md">
+        <h3>Proses Video dengan Narasi TTS</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Folder Video Sumber</label>
+                <input type="text" name="sourceDir" value="sumber_video" required>
+            </div>
+            <div class="form-group">
+                <label>Folder Output</label>
+                <input type="text" name="finalDir" value="video_tts_narasi" required>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Konteks / Topik Monolog AI</label>
+            <textarea name="context" rows="3" placeholder="Contoh: Cerita fakta unik tentang kebiasaan pagi"></textarea>
+        </div>
+        <div class="form-group">
+            <label>Folder SRT + WAV Eksternal (Opsional)</label>
+            <input type="text" name="srtWavDir" placeholder="Kosongkan untuk memakai Gemini + TikTok TTS">
+        </div>
+        <div class="actions-end">
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-microphone-alt"></i> Generate Narasi & Subtitle
+            </button>
+        </div>
+    </form>
+
+    <form id="tts-settings-form" class="card stack-md">
+        <h3>Konfigurasi TikTok TTS</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>TikTok Session ID</label>
+                <input type="text" id="tts-session-id" placeholder="Masukkan sessionid cookie TikTok">
+            </div>
+            <div class="form-group">
+                <label>Suara (Voice)</label>
+                <select id="tts-voice">
+                    <option value="id_001">Indonesian Female (id_001)</option>
+                    <option value="en_us_001">English US Female (en_us_001)</option>
+                    <option value="en_us_006">English US Male 1 (en_us_006)</option>
+                    <option value="en_us_007">English US Male 2 (en_us_007)</option>
+                    <option value="en_male_narration">Narrator Male (en_male_narration)</option>
+                </select>
+            </div>
+        </div>
+        <div class="actions-end">
+            <button type="submit" class="btn-secondary">Simpan Konfigurasi TTS</button>
+        </div>
+    </form>
+</div>

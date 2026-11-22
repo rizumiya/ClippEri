@@ -1,0 +1,138 @@
+<div class="view-header">
+    <div>
+        <h1>Repliz Auto Upload & Sheet</h1>
+        <p class="view-desc">Addon penjadwalan upload batch ke Repliz, storage webhook, dan logging Google Spreadsheet.</p>
+    </div>
+</div>
+
+<div class="tabs-inline" id="repliz-tabs">
+    <button type="button" class="tab-pill active" data-rtab="upload">Batch Upload</button>
+    <button type="button" class="tab-pill" data-rtab="accounts">Akun & Kredensial</button>
+</div>
+
+<div id="repliz-tab-upload">
+    <form id="repliz-upload-form" class="card stack-md">
+        <div class="form-group">
+            <label>Folder Video (.mp4 & captions.json)</label>
+            <input type="text" name="uploadDir" placeholder="Contoh: hasil_video" required>
+        </div>
+
+        <div class="form-group">
+            <label>Pilih Akun Repliz (Round-Robin)</label>
+            <div id="repliz-account-picker" class="check-grid"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Mode Penjadwalan</label>
+            <select name="scheduleMode" id="repliz-schedule-mode">
+                <option value="fixed">Waktu Pasti (Sama untuk semua)</option>
+                <option value="range">Rentang Tanggal & Jam (Sebar merata)</option>
+                <option value="list">Daftar Jam Spesifik</option>
+            </select>
+        </div>
+
+        <div id="repliz-sched-fixed" class="form-row">
+            <div class="form-group">
+                <label>Tanggal</label>
+                <input type="date" name="fixedDate">
+            </div>
+            <div class="form-group">
+                <label>Jam</label>
+                <input type="time" name="fixedTime" value="13:00">
+            </div>
+        </div>
+
+        <div id="repliz-sched-range" class="stack-sm" style="display:none;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Dari Tanggal</label>
+                    <input type="date" name="rangeStartDate">
+                </div>
+                <div class="form-group">
+                    <label>Sampai Tanggal</label>
+                    <input type="date" name="rangeEndDate">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Dari Jam</label>
+                    <input type="time" name="rangeStart" value="13:00">
+                </div>
+                <div class="form-group">
+                    <label>Sampai Jam</label>
+                    <input type="time" name="rangeEnd" value="17:00">
+                </div>
+            </div>
+        </div>
+
+        <div id="repliz-sched-list" class="form-row" style="display:none;">
+            <div class="form-group">
+                <label>Tanggal</label>
+                <input type="date" name="listDate">
+            </div>
+            <div class="form-group">
+                <label>Daftar Jam (pisah koma)</label>
+                <input type="text" name="listTimes" placeholder="09:00, 12:30, 18:00">
+            </div>
+        </div>
+
+        <div class="actions-end">
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-cloud-upload-alt"></i> Mulai Upload Batch
+            </button>
+        </div>
+    </form>
+</div>
+
+<div id="repliz-tab-accounts" style="display:none;" class="stack-md">
+    <form id="repliz-settings-form" class="card stack-md">
+        <h3>Kredensial & Webhook</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Repliz Access Key</label>
+                <input type="text" id="repliz-access-key" placeholder="Access Key">
+            </div>
+            <div class="form-group">
+                <label>Repliz Secret Key</label>
+                <input type="password" id="repliz-secret-key" placeholder="Secret Key">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Upload Webhook URL (Storage)</label>
+                <input type="text" id="repliz-webhook-url" placeholder="https://...">
+            </div>
+            <div class="form-group">
+                <label>Upload Public Base URL</label>
+                <input type="text" id="repliz-public-base" placeholder="https://...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Google Spreadsheet Webhook URL</label>
+            <input type="text" id="repliz-sheet-webhook" placeholder="https://script.google.com/...">
+        </div>
+        <div class="actions-end">
+            <button type="submit" class="btn-primary">Simpan Pengaturan Repliz</button>
+        </div>
+    </form>
+
+    <div class="card stack-md">
+        <h3>Daftar Akun Repliz</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Nama Akun</label>
+                <input type="text" id="repliz-new-acc-name" placeholder="Contoh: Instagram Toko">
+            </div>
+            <div class="form-group">
+                <label>Account ID</label>
+                <input type="text" id="repliz-new-acc-id" placeholder="ID Akun Repliz">
+            </div>
+        </div>
+        <div class="actions-end">
+            <button type="button" id="repliz-add-acc-btn" class="btn-secondary">
+                <i class="fas fa-plus"></i> Tambah Akun
+            </button>
+        </div>
+        <div id="repliz-accounts-table" class="stack-sm"></div>
+    </div>
+</div>

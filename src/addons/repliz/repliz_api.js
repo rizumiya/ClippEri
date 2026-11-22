@@ -4,9 +4,9 @@ const chalk = require("chalk");
 const BASE_URL = "https://api.repliz.com/public";
 
 /**
- * Upload video to Repliz via schedule API
- * @param {string} accessKey 
- * @param {string} secretKey 
+ * Upload video to Repliz via schedule API.
+ * @param {string} accessKey
+ * @param {string} secretKey
  * @param {object} data { title, description, videoUrl, accountId, scheduleAt }
  */
 async function scheduleReplizVideo(accessKey, secretKey, data) {
@@ -26,11 +26,11 @@ async function scheduleReplizVideo(accessKey, secretKey, data) {
             {
                 type: "video",
                 url: videoUrl,
-                thumbnail: "" // Optional if API handles it
+                thumbnail: ""
             }
         ],
         scheduleAt: scheduleAt.toISOString(),
-        accountId: accountId
+        accountId
     };
 
     try {

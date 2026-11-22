@@ -15,10 +15,22 @@ const defaultSettings = {
         fontFamily: "Poppins",
         fontSize: 80,
         lineSpacing: 0,
-        outlineColor: "#ff0000",
+        outlineColor: "#000000",
+        primaryColor: "#ffffff",
+        highlightColor: "#10b981",
+        highlightMode: "karaoke",
         maxLines: 2,
         maxWordsPerLine: 3,
-        positionBottom: 300
+        positionBottom: 300,
+        uppercase: false,
+        bold: true
+    },
+    subtitle_engine: {
+        binPath: "",
+        defaultModel: "small-q5_1"
+    },
+    encoding: {
+        videoEncoder: "auto"
     },
     gemini_api_key: "",
     source_folder: "sumber_video",
@@ -27,21 +39,9 @@ const defaultSettings = {
     trim_end: "",
     max_clips: 5,
     clip_duration: "2.5",
-    repliz_access_key: "",
-    repliz_secret_key: "",
-    repliz_account_id: [
-        { name: "Ai Chick Instagram", id: "6958940f3251303b1d87e33a" },
-        { name: "Ai Chick TikTok", id: "699e6594fd04380368c0444d" },
-        { name: "Instagram Aniprimadani", id: "69a25c607e118ff8ca94617c" },
-        { name: "fourside.tiramisu", id: "69992108fd043803689aecc3" },
-        { name: "Fourside Pusat", id: "69620a26a35a8aab2ab21506" },
-        { name: "Instagram Fourside.Tiramisu", id: "699fb545fd04380368c7e9f8" },
-        { name: "Ani Primadani", id: "6992934cfd04380368718a95" }
-    ],
-    upload_webhook_url: "https://automasi.xiexieicecream.com/webhook/photobooth/save-file",
-    upload_public_base_url: "https://files.xiexieicecream.com/auto-upload",
-    spreadsheet_webhook_url: "https://script.google.com/macros/s/AKfycbwDRuoRv8YJeQj4ZHhEFn3mkAYP0RxwAE2PfII5BX8wZzoVRjl3Jy37oAUswVnOFv8tsQ/exec",
     brands: [],
+    ai_personas: [],
+    addons: {},
     aio_defaults: {
         multicut: {
             maxClips: 5,
@@ -77,16 +77,84 @@ function mergeDeep(base, override) {
     return merged;
 }
 
+function migrateSettings(rawData) {
+    if (!isPlainObject(rawData)) return { migrated: rawData, changed: false };
+
+    let changed = false;
+    const next = { ...rawData };
+    if (!isPlainObject(next.addons)) {
+        next.addons = {};
+    }
+
+    // Migrate legacy Repliz / Storage / Spreadsheet keys into addons.repliz
+    const hasLegacyRepliz =
+        next.repliz_access_key !== undefined ||
+        next.repliz_secret_key !== undefined ||
+        next.repliz_account_id !== undefined ||
+        next.upload_webhook_url !== undefined ||
+        next.upload_public_base_url !== undefined ||
+        next.spreadsheet_webhook_url !== undefined;
+
+    if (!isPlainObject(next.addons.repliz) && hasLegacyRepliz) {
+        let normalizedAccounts = [];
+        if (Array.isArray(next.repliz_account_id)) {
+            normalizedAccounts = next.repliz_account_id;
+        } else if (next.repliz_account_id) {
+            normalizedAccounts = [next.repliz_account_id];
+        }
+
+        next.addons.repliz = {
+            enabled: false,
+            access_key: next.repliz_access_key || "",
+            secret_key: next.repliz_secret_key || "",
+            account_id: normalizedAccounts,
+            upload_webhook_url: next.upload_webhook_url || "",
+            upload_public_base_url: next.upload_public_base_url || "",
+            spreadsheet_webhook_url: next.spreadsheet_webhook_url || ""
+        };
+        changed = true;
+    }
+
+    // Migrate legacy TikTok TTS keys into addons['tts-narration']
+    const hasLegacyTts =
+        next.tiktok_session_id !== undefined ||
+        next.tiktok_voice !== undefined;
+
+    if (!isPlainObject(next.addons["tts-narration"]) && hasLegacyTts) {
+        next.addons["tts-narration"] = {
+            enabled: false,
+            tiktok_session_id: next.tiktok_session_id || "",
+            tiktok_voice: next.tiktok_voice || "id_001"
+        };
+        changed = true;
+    }
+
+    return { migrated: next, changed };
+}
+
+let migrationChecked = false;
+
 function getSettings() {
     if (!fs.existsSync(SETTINGS_PATH)) {
-        return defaultSettings;
+        return JSON.parse(JSON.stringify(defaultSettings));
     }
     try {
         const data = fs.readFileSync(SETTINGS_PATH, "utf8");
-        return mergeDeep(defaultSettings, JSON.parse(data));
+        const parsed = JSON.parse(data);
+
+        if (!migrationChecked) {
+            migrationChecked = true;
+            const { migrated, changed } = migrateSettings(parsed);
+            if (changed) {
+                saveSettings(migrated);
+                return mergeDeep(defaultSettings, migrated);
+            }
+        }
+
+        return mergeDeep(defaultSettings, parsed);
     } catch (err) {
         console.error("Gagal membaca settings.json:", err.message);
-        return defaultSettings;
+        return JSON.parse(JSON.stringify(defaultSettings));
     }
 }
 
@@ -100,4 +168,4 @@ function saveSettings(settings) {
     }
 }
 
-module.exports = { getSettings, saveSettings };
+module.exports = { getSettings, saveSettings, migrateSettings, defaultSettings };
