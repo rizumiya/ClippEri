@@ -16,6 +16,10 @@ const { analyzeVideo } = require('./core/analyzer');
 const { getPersonas, savePersonas, resetPersonas, resolvePersona } = require('./core/personas');
 const { loadAddons } = require('./core/addons');
 const { getEncoderSummary } = require('./utils/encoder');
+const { getEngineStatus, ensureEngine, ensureModel, transcribe } = require('./core/transcriber');
+const { groupWords, buildAss, getTargetMediaDimensions, burnSubtitles } = require('./core/subtitle_render');
+const { normalizeSubtitleAiSettings } = require('./utils/ass_helpers');
+const { ensureDirectoryExists } = require('./utils/shell');
 const { getSettings, saveSettings } = require('./utils/settings_manager');
 const config = require('./config');
 const fs = require('fs/promises');
@@ -475,6 +479,258 @@ app.post('/api/run/compress-video', async (req, res) => {
             });
 
         res.json({ message: "Compression process started" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- AUTO SUBTITLE & MEDIA BROWSER ENDPOINTS ---
+
+const MEDIA_VIDEO_EXTS = new Set(['.mp4', '.mkv', '.mov']);
+const MEDIA_AUDIO_EXTS = new Set(['.mp3', '.m4a', '.wav', '.aac', '.flac', '.ogg']);
+const ALL_MEDIA_EXTS = new Set([...MEDIA_VIDEO_EXTS, ...MEDIA_AUDIO_EXTS]);
+
+async function renderSubtitledFile({ filePath, outputDir, language = 'id', model, style = {}, onProgress }) {
+    const absInput = path.resolve(filePath);
+    const outDir = path.resolve(outputDir || path.dirname(absInput));
+    await ensureDirectoryExists(outDir);
+
+    const wordsPath = `${absInput}.words.json`;
+    let transcriptData = null;
+    try {
+        const raw = await fs.readFile(wordsPath, 'utf8');
+        transcriptData = JSON.parse(raw);
+    } catch {
+        transcriptData = await transcribe(absInput, { language, model, onProgress });
+    }
+
+    const words = Array.isArray(transcriptData?.words) ? transcriptData.words : [];
+    if (words.length === 0) {
+        throw new Error(`Tidak ada kata terdeteksi pada ${path.basename(absInput)}`);
+    }
+
+    const activeSettings = getSettings();
+    const mergedStyle = normalizeSubtitleAiSettings({ ...(activeSettings.subtitle_ai || {}), ...(style || {}) });
+    const captions = groupWords(words, {
+        maxWordsPerLine: mergedStyle.maxWordsPerLine,
+        maxLines: mergedStyle.maxLines
+    });
+
+    const dims = await getTargetMediaDimensions(absInput);
+    const assContent = buildAss(captions, mergedStyle, { width: dims.width, height: dims.height });
+
+    const baseName = path.basename(absInput, path.extname(absInput));
+    const assPath = path.join(outDir, `${baseName}_auto.ass`);
+    const outputPath = path.join(outDir, `${baseName}_subtitled.mp4`);
+
+    await fs.writeFile(assPath, assContent, 'utf8');
+    await burnSubtitles(absInput, assPath, outputPath);
+    return outputPath;
+}
+
+app.get('/api/subtitle/engine', (req, res) => {
+    try {
+        res.json(getEngineStatus());
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/subtitle/engine/install', async (req, res) => {
+    try {
+        const { model = 'small-q5_1' } = req.body || {};
+        console.log(chalk.magenta(`\n--- [GUI] Installing Subtitle Engine & Model (${model}) ---`));
+
+        (async () => {
+            try {
+                const emitProgress = (data) => io.emit('subtitle-progress', data);
+                await ensureEngine(emitProgress);
+                await ensureModel(model, emitProgress);
+                console.log(chalk.green(`✅ Subtitle Engine & Model (${model}) siap digunakan!`));
+                io.emit('subtitle-progress', { stage: 'done', model, percent: 100, message: 'Instalasi selesai.' });
+                io.emit('process-complete', { success: true, message: `Engine & model ${model} siap.` });
+            } catch (err) {
+                console.error(chalk.red(`❌ Gagal install subtitle engine: ${err.message}`));
+                io.emit('subtitle-progress', { stage: 'error', percent: 0, message: err.message });
+                io.emit('process-complete', { success: false, error: err.message });
+            }
+        })();
+
+        res.json({ message: 'Engine installation started' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/subtitle/transcribe', async (req, res) => {
+    try {
+        const { filePath, language = 'id', model, force = false } = req.body || {};
+        if (!filePath) {
+            return res.status(400).json({ error: 'filePath wajib diisi.' });
+        }
+        const result = await transcribe(filePath, {
+            language,
+            model,
+            force: Boolean(force),
+            onProgress: (data) => io.emit('subtitle-progress', data)
+        });
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error(chalk.red(`❌ Transcribe error: ${e.message}`));
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/subtitle/words', async (req, res) => {
+    try {
+        const { filePath, words } = req.body || {};
+        if (!filePath || !Array.isArray(words)) {
+            return res.status(400).json({ error: 'filePath dan words array wajib diisi.' });
+        }
+        const absInput = path.resolve(filePath);
+        const cachePath = `${absInput}.words.json`;
+
+        let existing = {};
+        try {
+            existing = JSON.parse(await fs.readFile(cachePath, 'utf8'));
+        } catch { /* create new */ }
+
+        const updated = {
+            ...existing,
+            words,
+            updatedAt: new Date().toISOString()
+        };
+        await fs.writeFile(cachePath, JSON.stringify(updated, null, 2), 'utf8');
+        res.json({ success: true, words });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/subtitle/burn', async (req, res) => {
+    try {
+        const { filePath, outputDir, language = 'id', model, style } = req.body || {};
+        if (!filePath) {
+            return res.status(400).json({ error: 'filePath wajib diisi.' });
+        }
+        const outputPath = await renderSubtitledFile({
+            filePath,
+            outputDir,
+            language,
+            model,
+            style,
+            onProgress: (data) => io.emit('subtitle-progress', data)
+        });
+        res.json({ success: true, outputPath });
+    } catch (e) {
+        console.error(chalk.red(`❌ Burn subtitle error: ${e.message}`));
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/run/subtitle-batch', async (req, res) => {
+    try {
+        const { sourceDir, finalDir, language = 'id', model, style } = req.body || {};
+        if (!sourceDir || !finalDir) {
+            return res.status(400).json({ error: 'sourceDir dan finalDir wajib diisi.' });
+        }
+
+        const absSource = path.resolve(sourceDir);
+        const entries = await fs.readdir(absSource, { withFileTypes: true });
+        const mediaFiles = entries
+            .filter((ent) => ent.isFile() && ALL_MEDIA_EXTS.has(path.extname(ent.name).toLowerCase()))
+            .map((ent) => path.join(absSource, ent.name));
+
+        if (mediaFiles.length === 0) {
+            return res.status(400).json({ error: 'Tidak ada file video atau audio di folder sumber.' });
+        }
+
+        console.log(chalk.magenta(`\n--- [GUI] Starting Auto Subtitle Batch (${mediaFiles.length} files) ---`));
+
+        (async () => {
+            let successCount = 0;
+            let failCount = 0;
+            for (let i = 0; i < mediaFiles.length; i++) {
+                const f = mediaFiles[i];
+                console.log(chalk.cyan(`\n[${i + 1}/${mediaFiles.length}] Memproses: ${path.basename(f)}`));
+                try {
+                    await renderSubtitledFile({
+                        filePath: f,
+                        outputDir: finalDir,
+                        language,
+                        model,
+                        style,
+                        onProgress: (data) => io.emit('subtitle-progress', { ...data, fileIndex: i + 1, totalFiles: mediaFiles.length })
+                    });
+                    successCount++;
+                } catch (err) {
+                    failCount++;
+                    console.error(chalk.red(`   ❌ Gagal (${path.basename(f)}): ${err.message}`));
+                }
+            }
+            console.log(chalk.green.bold(`\n🎉 Auto Subtitle Batch selesai! Sukses: ${successCount}, Gagal: ${failCount}`));
+            io.emit('process-complete', {
+                success: failCount === 0,
+                message: `Subtitle batch selesai (${successCount}/${mediaFiles.length} berhasil).`
+            });
+        })();
+
+        res.json({ message: `Started batch auto-subtitle for ${mediaFiles.length} files` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/media', async (req, res) => {
+    try {
+        const rawPath = String(req.query.path || '').trim();
+        if (!rawPath) {
+            return res.status(400).json({ error: 'Parameter path wajib diisi.' });
+        }
+        const absPath = path.resolve(rawPath);
+        const ext = path.extname(absPath).toLowerCase();
+        if (!ALL_MEDIA_EXTS.has(ext)) {
+            return res.status(403).json({ error: 'Ekstensi file tidak didukung untuk preview media.' });
+        }
+        const stat = await fs.stat(absPath).catch(() => null);
+        if (!stat || !stat.isFile()) {
+            return res.status(404).json({ error: 'File media tidak ditemukan.' });
+        }
+        res.sendFile(absPath);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/fs/list', async (req, res) => {
+    try {
+        const rawDir = String(req.query.dir || '').trim();
+        if (!rawDir) {
+            return res.status(400).json({ error: 'Parameter dir wajib diisi.' });
+        }
+        const absDir = path.resolve(rawDir);
+        const entries = await fs.readdir(absDir, { withFileTypes: true });
+        const results = [];
+
+        for (const ent of entries) {
+            if (!ent.isFile()) continue;
+            const ext = path.extname(ent.name).toLowerCase();
+            if (!ALL_MEDIA_EXTS.has(ext)) continue;
+
+            const fullPath = path.join(absDir, ent.name);
+            const stat = await fs.stat(fullPath).catch(() => null);
+            const hasTranscript = await fs.access(`${fullPath}.words.json`).then(() => true).catch(() => false);
+            results.push({
+                name: ent.name,
+                path: fullPath,
+                ext,
+                type: MEDIA_AUDIO_EXTS.has(ext) ? 'audio' : 'video',
+                size: stat ? stat.size : 0,
+                hasTranscript
+            });
+        }
+
+        res.json({ dir: absDir, files: results });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
