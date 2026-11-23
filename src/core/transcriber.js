@@ -90,7 +90,7 @@ async function downloadFileStream(url, destPath, onProgress, stageInfo = {}) {
 
     const response = await axios.get(url, {
         responseType: "stream",
-        headers: { "User-Agent": "VideoToolkit" },
+        headers: { "User-Agent": "ClippEri" },
         maxRedirects: 10,
         timeout: 60000
     });
@@ -136,7 +136,7 @@ async function ensureEngine(onProgress) {
     if (onProgress) onProgress({ stage: "engine", percent: 0, message: "Mencari rilis terbaru whisper.cpp..." });
 
     const releaseRes = await axios.get("https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=10", {
-        headers: { "User-Agent": "VideoToolkit" },
+        headers: { "User-Agent": "ClippEri" },
         timeout: 20000
     });
 

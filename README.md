@@ -1,6 +1,6 @@
-# Video Toolkit Studio
+# ClippEri
 
-Toolkit pengolahan video dan audio berbasis Node.js + FFmpeg dengan antarmuka web minimalis bernuansa pastel lembut (pilihan palet Lavender, Sky, Rose, dan Peach + mode terang/gelap) serta dukungan akselerasi GPU.
+ClippEri adalah suite pemrosesan video, AI Highlight Clipper, dan Editorial Subtitle Studio berbasis Node.js + FFmpeg dengan antarmuka web minimalis bernuansa pastel lembut (pilihan palet Lavender, Sky, Rose, dan Peach + mode terang/gelap) serta dukungan akselerasi GPU.
 
 ## Fitur Utama
 
@@ -13,7 +13,7 @@ Toolkit pengolahan video dan audio berbasis Node.js + FFmpeg dengan antarmuka we
 - **AI Highlight Clipper**: Ambil video panjang lokal atau link YouTube, transkrip dengan Whisper.cpp, lalu biarkan Gemini memilih momen paling menarik lengkap dengan skor viralitas, penyesuaian batas kata (*word-boundary snap*), konversi `Portrait Blur 9:16` / `Portrait Crop`, dan subtitle karaoke otomatis.
 - **Video Forge (1 Foto Produk / 1 Topik → Video)**: Upload 1–5 foto produk (atau ketik 1 topik), Gemini otomatis menulis skrip per scene (termasuk analisis visual foto produk), membuat voiceover gratis via **Microsoft Edge TTS** (`id-ID-GadisNeural`, `id-ID-ArdiNeural`, dll.) lengkap dengan timestamp kata, mengunci proporsi foto produk dengan efek *Ken Burns* + B-roll gratis Openverse/Wikimedia, dan burn subtitle karaoke.
 - **AI Hooks & Persona Global**: Generator hook pembuka dan caption menggunakan Gemini AI. System persona bersifat global dan dapat ditambah, diubah, dihapus, atau diisi *custom prompt* langsung dari **Pengaturan → Persona AI**.
-- **Subtitle Otomatis (Whisper.cpp)**: Transkripsi audio otomatis secara offline dengan timestamp per kata, preview langsung di browser dengan penanda kata yang sedang/sudah diucapkan (**Karaoke** atau **Kata Aktif**), editor klik-untuk-lompat / double-klik untuk koreksi kata, serta burn-in permanen ke `.mp4` (untuk video maupun file audio).
+- **Subtitle Otomatis (Whisper.cpp DTW + Gemini Audio)**: Transkripsi audio offline per kata dengan penyelarasan akustik DTW (`-dtw`), opsional koreksi teks langsung dari suara asli menggunakan **Gemini Audio AI**, timing karaoke absolut bebas drift kumulatif, kontrol penuh gaya subtitle + preset sekali klik (*Editorial Kiri*, *Editorial Gold*, *Tebal Tengah*) termasuk perataan kiri/kanan, font kecil/italic, ketebalan outline `0`, gradasi gelap bawah, dan footer editorial, serta burn-in permanen ke `.mp4`.
 
 ### 3. Tools Umum
 - **YouTube Downloader**: Unduh satu atau banyak link YouTube sekaligus.
@@ -44,7 +44,8 @@ Untuk mengaktifkan atau menonaktifkan addon:
 ### Web GUI (Direkomendasikan)
 Jalankan `start_gui.bat` atau perintah berikut:
 ```bash
-node src/server.js
+npm run gui
+# atau: node src/server.js
 ```
 Buka browser di `http://localhost:3000`.
 
@@ -57,3 +58,7 @@ node index.js
 1. Buka tab **Subtitle Otomatis** di sidebar.
 2. Pilih model Whisper (`small-q5_1` direkomendasikan untuk Bahasa Indonesia; `base-q5_1` untuk ukuran ringan).
 3. Klik **Install / Unduh Model** — binary `whisper-cli.exe` dan model akan diunduh otomatis ke `tools/whisper/`.
+
+## Lisensi
+
+Proyek ini dirilis di bawah lisensi [MIT](LICENSE).

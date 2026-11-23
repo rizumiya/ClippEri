@@ -1,25 +1,32 @@
 {
-  "name": "video-toolkit-rizumiya",
+  "name": "clipperi",
   "version": "1.0.0",
-  "description": "Video processing toolkit with AI-powered features and Repliz integration",
+  "description": "ClippEri — AI-powered video clipper, editorial subtitle studio, and video workflow suite",
   "main": "index.js",
   "type": "commonjs",
   "bin": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "pkg . --targets node18-win-x64 --output dist/VideoToolkit-Rizumiya.exe --compress GZip",
-    "build:all": "pkg . --targets node18-win-x64,node18-linux-x64,node18-macos-x64 --output dist/VideoToolkit-Rizumiya --compress GZip"
+    "gui": "node src/server.js",
+    "build": "pkg . --targets node18-win-x64 --output dist/ClippEri.exe --compress GZip",
+    "build:all": "pkg . --targets node18-win-x64,node18-linux-x64,node18-macos-x64 --output dist/ClippEri --compress GZip"
   },
   "keywords": [
-    "video",
-    "toolkit",
+    "clipperi",
+    "video-clipper",
+    "subtitle",
+    "whisper",
     "ffmpeg",
     "ai",
-    "repliz",
     "automation"
   ],
   "author": "@rizumiya",
-  "license": "ISC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rizumiya/ClippEri.git"
+  },
+  "homepage": "https://github.com/rizumiya/ClippEri#readme",
   "devDependencies": {
     "pkg": "^5.8.1"
   },

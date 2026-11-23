@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * VIDEO TOOLKIT ALL-IN-ONE (RIZUMIYA)
+ * CLIPPERI — AI VIDEO CLIPPING & WORKFLOW STUDIO (@rizumiya)
  * Modularized for better maintainability and configurability.
  */
 
@@ -78,7 +78,7 @@ async function mainMenu() {
   while (true) {
     console.clear(); // Bersihkan layar setiap kali kembali ke menu utama
     console.log(chalk.green.bold("\n=================================================="));
-    console.log(chalk.green.bold("        VIDEO TOOLKIT ALL-IN-ONE (RIZUMIYA)"));
+    console.log(chalk.green.bold("          CLIPPERI STUDIO (RIZUMIYA)"));
     console.log(chalk.green.bold("=================================================="));
 
 
@@ -131,7 +131,7 @@ async function mainMenu() {
           await settingsMenu();
           break;
         case "gui":
-          console.log(chalk.cyan("\n🌐 Memulai Video Toolkit GUI..."));
+          console.log(chalk.cyan("\n🌐 Memulai ClippEri GUI..."));
           console.log(chalk.yellow("Info: Browser akan otomatis terbuka."));
           console.log(chalk.gray("Tekan Ctrl+C untuk menutup aplikasi."));
           require("./src/server");

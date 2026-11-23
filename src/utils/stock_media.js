@@ -15,7 +15,7 @@ async function downloadValidImage(url, destBasePath) {
             responseType: "arraybuffer",
             timeout: 12000,
             maxContentLength: MAX_IMAGE_BYTES,
-            headers: { "User-Agent": "VideoToolkit/1.0 (https://localhost)" }
+            headers: { "User-Agent": "ClippEri/1.0 (https://github.com/rizumiya/ClippEri)" }
         });
 
         const contentType = String(res.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
@@ -46,7 +46,7 @@ async function searchOpenverse(query, destBasePath) {
         const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=6&license_type=commercial`;
         const res = await axios.get(url, {
             timeout: 10000,
-            headers: { "User-Agent": "VideoToolkit/1.0" }
+            headers: { "User-Agent": "ClippEri/1.0" }
         });
         const items = Array.isArray(res.data?.results) ? res.data.results : [];
         for (const item of items) {
@@ -64,7 +64,7 @@ async function searchWikimedia(query, destBasePath) {
         const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|mime|size&format=json&gsrlimit=6`;
         const res = await axios.get(url, {
             timeout: 10000,
-            headers: { "User-Agent": "VideoToolkit/1.0" }
+            headers: { "User-Agent": "ClippEri/1.0" }
         });
         const pages = res.data?.query?.pages ? Object.values(res.data.query.pages) : [];
         for (const page of pages) {
