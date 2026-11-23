@@ -375,7 +375,7 @@ async function renderHighlights({
 
         // Shift words into clip-relative timeline [0, dur]
         const clipWords = allWords
-            .filter((w) => Number(w.end) > start - 0.05 && Number(w.start) < end + 0.05)
+            .filter((w) => Number(w.end) > start + 0.03 && Number(w.start) < end - 0.03)
             .map((w) => {
                 const wStart = Math.max(0, Number(w.start) - start);
                 const wEnd = Math.min(dur, Math.max(wStart + 0.04, Number(w.end) - start));

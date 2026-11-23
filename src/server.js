@@ -19,6 +19,8 @@ const { getEncoderSummary } = require('./utils/encoder');
 const { getEngineStatus, ensureEngine, ensureModel, transcribe } = require('./core/transcriber');
 const { groupWords, buildAss, getTargetMediaDimensions, burnSubtitles } = require('./core/subtitle_render');
 const { analyzeHighlights, renderHighlights } = require('./core/highlight_clipper');
+const { generateForgeScript, renderForgeVideo } = require('./core/video_forge');
+const { EDGE_VOICES, synthesizeEdgeTTS } = require('./utils/edge_tts');
 const { normalizeSubtitleAiSettings } = require('./utils/ass_helpers');
 const { ensureDirectoryExists } = require('./utils/shell');
 const { getSettings, saveSettings } = require('./utils/settings_manager');
@@ -30,7 +32,7 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 app.use(express.static(path.join(__dirname, '../public')));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 
 // --- LOGGING INTERCEPTION ---
 const originalLog = console.log;
@@ -787,6 +789,99 @@ app.post('/api/clipper/render', async (req, res) => {
             });
 
         res.json({ message: 'Highlight rendering started' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- EDGE TTS & VIDEO FORGE ENDPOINTS ---
+
+app.get('/api/tts/voices', (req, res) => {
+    res.json(EDGE_VOICES);
+});
+
+app.post('/api/tts/preview', async (req, res) => {
+    try {
+        const {
+            text = 'Halo! Ini adalah contoh suara Edge TTS gratis untuk video Anda.',
+            voice = 'id-ID-GadisNeural',
+            rate = '+0%'
+        } = req.body || {};
+        const outPath = path.resolve(process.cwd(), 'temp', 'tts_preview.mp3');
+        await synthesizeEdgeTTS(text, outPath, { voice, rate });
+        res.json({ success: true, audioPath: outPath });
+    } catch (e) {
+        console.error(chalk.red(`❌ TTS preview error: ${e.message}`));
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/forge/upload-image', async (req, res) => {
+    try {
+        const { dataUrl, filename = 'product.png' } = req.body || {};
+        const match = String(dataUrl || '').match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/i);
+        if (!match) {
+            return res.status(400).json({ error: 'Format gambar tidak valid (hanya PNG, JPEG, WEBP).' });
+        }
+
+        const mime = match[1].toLowerCase();
+        const ext = mime.includes('png') ? '.png' : (mime.includes('webp') ? '.webp' : '.jpg');
+        const safeBase = path.basename(String(filename), path.extname(String(filename)))
+            .replace(/[^a-z0-9_-]/gi, '_')
+            .slice(0, 40) || 'product';
+
+        const uploadDir = path.resolve(process.cwd(), 'temp', 'forge_uploads');
+        await ensureDirectoryExists(uploadDir);
+        const destPath = path.join(uploadDir, `${Date.now()}_${safeBase}${ext}`);
+        await fs.writeFile(destPath, Buffer.from(match[3], 'base64'));
+
+        res.json({ success: true, filePath: destPath });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/forge/script', async (req, res) => {
+    try {
+        const payload = req.body || {};
+        console.log(chalk.magenta(`\n--- [GUI] Generating Video Forge Script (${payload.mode || 'product'}) ---`));
+        const script = await generateForgeScript(payload);
+        console.log(chalk.green(`✅ Skrip AI dibuat (${script.scenes.length} scene).`));
+        res.json({ success: true, script });
+    } catch (e) {
+        console.error(chalk.red(`❌ Forge script error: ${e.message}`));
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/forge/render', async (req, res) => {
+    try {
+        const payload = req.body || {};
+        if (!payload.script || !Array.isArray(payload.script.scenes) || payload.script.scenes.length === 0) {
+            return res.status(400).json({ error: 'Skrip video wajib memiliki minimal 1 scene.' });
+        }
+        console.log(chalk.magenta(`\n--- [GUI] Rendering Video Forge (${payload.script.scenes.length} scenes) ---`));
+
+        renderForgeVideo({
+            ...payload,
+            onProgress: (data) => io.emit('forge-progress', data)
+        })
+            .then((result) => {
+                io.emit('process-complete', {
+                    success: true,
+                    message: `Video Forge selesai: ${path.basename(result.outputPath)}`,
+                    outputPath: result.outputPath,
+                    wordsPath: result.wordsPath,
+                    txtPath: result.txtPath
+                });
+            })
+            .catch((err) => {
+                console.error(chalk.red(`❌ Forge render error: ${err.message}`));
+                io.emit('forge-progress', { stage: 'error', percent: 0, message: err.message });
+                io.emit('process-complete', { success: false, error: err.message });
+            });
+
+        res.json({ message: 'Forge rendering started' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
