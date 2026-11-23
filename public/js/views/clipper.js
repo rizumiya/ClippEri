@@ -118,7 +118,7 @@ export async function mount(container) {
                     </div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row-3">
                     <div class="form-group">
                         <label>Gaya Subtitle Klip</label>
                         <select id="cl-style-preset">
@@ -131,6 +131,12 @@ export async function mount(container) {
                     <div class="form-group">
                         <label>Footer Label Editorial (Opsional)</label>
                         <input type="text" id="cl-footer-text" maxlength="120" value="${escapeHtml(cfg.subtitle_ai?.footerText || "")}" placeholder="Misal: PODCAST · EPISODE 12">
+                    </div>
+                    <div class="form-group" style="justify-content:end;">
+                        <label class="toggle-row" style="margin-top:auto;">
+                            <span>Koreksi Teks via Gemini AI (Audio)</span>
+                            <input type="checkbox" id="cl-ai-correct" checked>
+                        </label>
                     </div>
                 </div>
 
@@ -394,6 +400,7 @@ export async function mount(container) {
             highlights: chosen,
             aspectMode: container.querySelector("#cl-aspect").value,
             burnSubtitles: container.querySelector("#cl-burn-sub").checked,
+            aiCorrectSubtitles: container.querySelector("#cl-ai-correct").checked,
             style: customStyle
         });
         toast(`Merender ${chosen.length} klip highlight...`);

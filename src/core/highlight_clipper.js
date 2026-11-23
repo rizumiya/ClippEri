@@ -4,6 +4,7 @@ const fsp = require("fs/promises");
 const chalk = require("chalk");
 const { downloadYoutubeCore } = require("./downloader");
 const { transcribe } = require("./transcriber");
+const { correctWordsWithGemini } = require("./subtitle_corrector");
 const { groupWords, buildAss, buildBottomGradientFilter, getTargetMediaDimensions } = require("./subtitle_render");
 const { getApiKeyList, callWithFallback, buildModel } = require("./ai_hook");
 const { runEncode } = require("../utils/encoder");
@@ -320,9 +321,12 @@ async function renderHighlights({
     highlights = [],
     aspectMode = "portrait_blur",
     burnSubtitles = true,
+    aiCorrectSubtitles = false,
+    retranscribeDtwIfLegacy = true,
     style = {},
     onProgress
 } = {}) {
+    const overallStart = Date.now();
     const absVideo = path.resolve(videoPath);
     if (!fs.existsSync(absVideo)) {
         throw new Error(`File video tidak ditemukan: ${absVideo}`);
@@ -336,12 +340,16 @@ async function renderHighlights({
 
     let allWords = [];
     let transcriptLang = "id";
+    let hasDtwCache = false;
+    let cachedModel = undefined;
     const wordsCachePath = `${absVideo}.words.json`;
     if (burnSubtitles && fs.existsSync(wordsCachePath)) {
         try {
             const parsed = JSON.parse(await fsp.readFile(wordsCachePath, "utf8"));
             allWords = Array.isArray(parsed.words) ? parsed.words : [];
             transcriptLang = parsed.language || "id";
+            hasDtwCache = Boolean(parsed.dtw);
+            cachedModel = parsed.model || undefined;
         } catch { /* ignore */ }
     }
 
@@ -354,6 +362,15 @@ async function renderHighlights({
     const renderedClips = [];
 
     for (let i = 0; i < highlights.length; i++) {
+        const clipStartMs = Date.now();
+        let dtwMs = 0;
+        let aiCorrectMs = 0;
+        let encodeMs = 0;
+        let aiChangesCount = 0;
+        let aiSampleChanges = [];
+        let clipHasDtw = hasDtwCache;
+        let clipAiCorrected = false;
+
         const hl = highlights[i];
         const start = Math.max(0, Number(hl.start) || 0);
         const end = Math.max(start + 0.5, Number(hl.end) || start + 5);
@@ -373,23 +390,84 @@ async function renderHighlights({
         }
         console.log(chalk.cyan(`✂️  [${i + 1}/${highlights.length}] Merender ${outFileName} (${start.toFixed(2)}s - ${end.toFixed(2)}s)...`));
 
-        // Shift words into clip-relative timeline [0, dur]
-        const clipWords = allWords
-            .filter((w) => Number(w.end) > start + 0.03 && Number(w.start) < end - 0.03)
-            .map((w) => {
-                const wStart = Math.max(0, Number(w.start) - start);
-                const wEnd = Math.min(dur, Math.max(wStart + 0.04, Number(w.end) - start));
-                return {
-                    text: w.text,
-                    start: Number(wStart.toFixed(3)),
-                    end: Number(wEnd.toFixed(3))
-                };
-            });
+        let clipWords = [];
+        if (burnSubtitles) {
+            if ((!hasDtwCache || allWords.length === 0) && retranscribeDtwIfLegacy) {
+                const dtwT0 = Date.now();
+                if (onProgress) {
+                    onProgress({
+                        stage: "render",
+                        percent: Math.min(95, Math.round(((i + 0.15) / highlights.length) * 100)),
+                        message: `Menyelaraskan timestamp DTW klip ${i + 1}/${highlights.length}...`
+                    });
+                }
+                const dtwRes = await transcribe(absVideo, {
+                    language: transcriptLang,
+                    model: cachedModel,
+                    startSec: start,
+                    durationSec: dur,
+                    force: true
+                });
+                dtwMs = Date.now() - dtwT0;
+                clipHasDtw = Boolean(dtwRes.dtw);
+                clipWords = (Array.isArray(dtwRes.words) ? dtwRes.words : []).map((w) => {
+                    const wStart = Math.max(0, Math.min(dur - 0.04, Number(w.start) || 0));
+                    const wEnd = Math.min(dur, Math.max(wStart + 0.04, Number(w.end) || wStart + 0.04));
+                    return {
+                        text: w.text,
+                        start: Number(wStart.toFixed(3)),
+                        end: Number(wEnd.toFixed(3))
+                    };
+                });
+            } else {
+                // Shift words into clip-relative timeline [0, dur]
+                clipWords = allWords
+                    .filter((w) => Number(w.end) > start + 0.03 && Number(w.start) < end - 0.03)
+                    .map((w) => {
+                        const wStart = Math.max(0, Number(w.start) - start);
+                        const wEnd = Math.min(dur, Math.max(wStart + 0.04, Number(w.end) - start));
+                        return {
+                            text: w.text,
+                            start: Number(wStart.toFixed(3)),
+                            end: Number(wEnd.toFixed(3))
+                        };
+                    });
+            }
+
+            if (aiCorrectSubtitles && clipWords.length > 0) {
+                if (onProgress) {
+                    onProgress({
+                        stage: "render",
+                        percent: Math.min(95, Math.round(((i + 0.35) / highlights.length) * 100)),
+                        message: `Koreksi subtitle audio AI klip ${i + 1}/${highlights.length}...`
+                    });
+                }
+                try {
+                    const corrRes = await correctWordsWithGemini({
+                        mediaPath: absVideo,
+                        words: clipWords,
+                        startSec: start,
+                        durationSec: dur,
+                        language: transcriptLang,
+                        context: hl.title || ""
+                    });
+                    clipWords = corrRes.words;
+                    aiCorrectMs = corrRes.elapsedMs;
+                    aiChangesCount = corrRes.changedCount;
+                    aiSampleChanges = corrRes.changes.slice(0, 15);
+                    clipAiCorrected = true;
+                } catch (err) {
+                    console.log(chalk.yellow(`   ⚠️ Koreksi AI dilewati untuk klip ${i + 1}: ${err.message}`));
+                }
+            }
+        }
 
         if (clipWords.length > 0) {
             await fsp.writeFile(`${outPath}.words.json`, JSON.stringify({
                 words: clipWords,
                 language: transcriptLang,
+                dtw: clipHasDtw,
+                aiCorrected: clipAiCorrected,
                 duration: dur,
                 updatedAt: new Date().toISOString()
             }, null, 2), "utf8");
@@ -418,6 +496,7 @@ async function renderHighlights({
             const postChain = overlayParts.join(",");
             const postSuffix = postChain ? `,${postChain}` : "";
 
+            const encodeT0 = Date.now();
             await runEncode((encArgs) => {
                 if (aspectMode === "original") {
                     const vfArg = postChain ? `-vf "${postChain}"` : "";
@@ -430,6 +509,17 @@ async function renderHighlights({
                 const fc = `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:8[bg];[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2${postSuffix}[v]`;
                 return `ffmpeg -y -ss ${start} -i "${absVideo}" -t ${dur} -filter_complex "${fc}" -map "[v]" -map "0:a?" ${encArgs} -c:a aac -b:a 128k "${outPath}"`;
             }, { quality: 23, preset: "fast" });
+            encodeMs = Date.now() - encodeT0;
+
+            const clipTotalMs = Date.now() - clipStartMs;
+            const timings = {
+                dtwMs,
+                aiCorrectMs,
+                encodeMs,
+                totalMs: clipTotalMs,
+                aiChangesCount,
+                aiSampleChanges
+            };
 
             renderedClips.push({
                 path: outPath,
@@ -439,9 +529,10 @@ async function renderHighlights({
                 start,
                 end,
                 duration: dur,
-                caption: hl.caption || ""
+                caption: hl.caption || "",
+                timings
             });
-            console.log(chalk.green(`   ✅ Selesai: ${outFileName}`));
+            console.log(chalk.green(`   ✅ Selesai: ${outFileName} (${(clipTotalMs / 1000).toFixed(2)}s)`));
         } finally {
             if (hasAss) {
                 await fsp.unlink(tempAssPath).catch(() => {});
@@ -449,22 +540,26 @@ async function renderHighlights({
         }
     }
 
+    const totalMs = Date.now() - overallStart;
     const manifestPath = path.join(outDir, "highlights_manifest.json");
     await fsp.writeFile(manifestPath, JSON.stringify({
         sourceVideo: absVideo,
         aspectMode,
         burnSubtitles: Boolean(burnSubtitles),
+        aiCorrectSubtitles: Boolean(aiCorrectSubtitles),
+        timings: { totalMs },
         createdAt: new Date().toISOString(),
         clips: renderedClips
     }, null, 2), "utf8");
 
     if (onProgress) onProgress({ stage: "done", percent: 100, message: `Selesai merender ${renderedClips.length} klip.` });
-    console.log(chalk.green.bold(`\n🎉 Highlight Clipper selesai! ${renderedClips.length} klip tersimpan di ${outDir}`));
+    console.log(chalk.green.bold(`\n🎉 Highlight Clipper selesai! ${renderedClips.length} klip tersimpan di ${outDir} (${(totalMs / 1000).toFixed(2)}s)`));
 
     return {
         outputDir: outDir,
         manifestPath,
-        clips: renderedClips
+        clips: renderedClips,
+        timings: { totalMs }
     };
 }
 

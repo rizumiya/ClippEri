@@ -226,21 +226,142 @@ async function probeMediaDuration(filePath) {
     }
 }
 
+function getDtwPreset(modelName = "") {
+    const name = String(modelName || "").trim();
+    if (/^tiny\.en/i.test(name)) return "tiny.en";
+    if (/^tiny/i.test(name)) return "tiny";
+    if (/^base\.en/i.test(name)) return "base.en";
+    if (/^base/i.test(name)) return "base";
+    if (/^small\.en/i.test(name)) return "small.en";
+    if (/^small/i.test(name)) return "small";
+    if (/^medium\.en/i.test(name)) return "medium.en";
+    if (/^medium/i.test(name)) return "medium";
+    if (/^large/i.test(name)) return "large.v3";
+    return null;
+}
+
 function parseWhisperTranscriptionJson(jsonObj) {
     const items = Array.isArray(jsonObj?.transcription) ? jsonObj.transcription : [];
     const words = [];
+    let globalLastStart = -0.001;
 
     for (const item of items) {
+        const segFromMs = Number(item.offsets?.from);
+        const segToMs = Number(item.offsets?.to);
+        const segStart = Number.isFinite(segFromMs) ? Math.max(0, segFromMs / 1000) : Math.max(0, globalLastStart);
+        const segEnd = Number.isFinite(segToMs) ? Math.max(segStart + 0.05, segToMs / 1000) : segStart + 1;
+
+        if (Array.isArray(item.tokens) && item.tokens.length > 0) {
+            const segWords = [];
+            const isPunctOnly = (txt) => /^[.,;:!?…]+$/.test(txt);
+
+            for (const tok of item.tokens) {
+                const rawText = String(tok.text || "");
+                const trimmed = rawText.trim();
+                if (!trimmed) continue;
+                if (/^\[.*\]$/.test(trimmed) || /^<.*>$/.test(trimmed)) continue;
+
+                const tFromMs = Number(tok.offsets?.from);
+                const tToMs = Number(tok.offsets?.to);
+                const offStart = Number.isFinite(tFromMs) ? Math.max(segStart, Math.min(segEnd, tFromMs / 1000)) : null;
+                const offEnd = Number.isFinite(tToMs) ? Math.max(segStart, Math.min(segEnd, tToMs / 1000)) : null;
+                const dtwCs = Number(tok.t_dtw);
+                const dtwSec = Number.isFinite(dtwCs) && dtwCs >= 0
+                    ? Math.max(segStart, Math.min(segEnd, dtwCs / 100))
+                    : null;
+
+                const startsNewWord = segWords.length === 0 || (/^\s/.test(rawText) && !isPunctOnly(trimmed));
+                if (startsNewWord) {
+                    segWords.push({
+                        text: trimmed,
+                        offStart,
+                        offEnd,
+                        firstDtw: dtwSec,
+                        lastDtw: dtwSec
+                    });
+                } else {
+                    const prev = segWords[segWords.length - 1];
+                    prev.text += isPunctOnly(trimmed) ? trimmed : rawText;
+                    if (prev.offStart === null && offStart !== null) prev.offStart = offStart;
+                    if (offEnd !== null) prev.offEnd = Math.max(prev.offEnd ?? offEnd, offEnd);
+                    if (prev.firstDtw === null && dtwSec !== null) prev.firstDtw = dtwSec;
+                    if (dtwSec !== null) prev.lastDtw = Math.max(prev.lastDtw ?? dtwSec, dtwSec);
+                }
+            }
+
+            if (segWords.length === 0) continue;
+
+            // Compute rawStart per word cleanly using first valid DTW anchor, fallback to offStart
+            let prevRaw = segStart;
+            for (let i = 0; i < segWords.length; i++) {
+                const w = segWords[i];
+                let raw = w.firstDtw !== null ? w.firstDtw : (w.offStart !== null ? w.offStart : prevRaw);
+                raw = Math.max(segStart, Math.min(segEnd, Math.max(prevRaw, raw)));
+                w.rawStart = raw;
+                prevRaw = raw;
+            }
+
+            // De-collide any consecutive words sharing an identical rawStart
+            let i = 0;
+            while (i < segWords.length) {
+                const T = segWords[i].rawStart;
+                let rEnd = i;
+                while (rEnd + 1 < segWords.length && Math.abs(segWords[rEnd + 1].rawStart - T) < 0.002) {
+                    rEnd++;
+                }
+                const runLen = rEnd - i + 1;
+                if (runLen > 1) {
+                    const windowStart = (i === 0 && segWords[0].offStart !== null && segWords[0].offStart < T && segWords[0].offStart >= segStart)
+                        ? segWords[0].offStart
+                        : T;
+                    const nextDistinct = rEnd + 1 < segWords.length ? segWords[rEnd + 1].rawStart : segEnd;
+                    const windowEnd = Math.max(windowStart + 0.05 * runLen, Math.min(segEnd, nextDistinct));
+                    const span = Math.max(0.05 * runLen, windowEnd - windowStart);
+                    const totalChars = segWords.slice(i, rEnd + 1).reduce((s, w) => s + Math.max(1, w.text.length), 0);
+
+                    let cursor = windowStart;
+                    for (let k = i; k <= rEnd; k++) {
+                        const share = Math.max(1, segWords[k].text.length) / totalChars;
+                        segWords[k].start = cursor;
+                        cursor += span * share;
+                        segWords[k].distEnd = cursor;
+                    }
+                } else {
+                    segWords[i].start = T;
+                }
+                i = rEnd + 1;
+            }
+
+            // Assign monotonic global start & clean word end boundaries
+            for (let idx = 0; idx < segWords.length; idx++) {
+                const w = segWords[idx];
+                const cleanText = w.text.trim();
+                if (!cleanText) continue;
+
+                const start = Math.max(globalLastStart + 0.005, w.start);
+                const nextStart = idx + 1 < segWords.length ? segWords[idx + 1].start : segEnd;
+                const candEnd = w.distEnd ?? Math.max(w.lastDtw ?? 0, w.offEnd ?? 0, start + 0.06);
+                const maxBound = idx + 1 < segWords.length ? Math.max(start + 0.04, nextStart) : Math.max(start + 0.04, segEnd);
+                const end = Math.min(maxBound, Math.max(start + 0.04, candEnd));
+
+                globalLastStart = start;
+                words.push({
+                    text: cleanText,
+                    start: Number(start.toFixed(3)),
+                    end: Number(end.toFixed(3))
+                });
+            }
+            continue;
+        }
+
+        // Legacy fallback when item.tokens is unavailable
         const rawText = String(item.text || "").trim();
         if (!rawText) continue;
         if (/^\[.*\]$/.test(rawText) || /^<.*>$/.test(rawText)) continue;
+        if (!Number.isFinite(segFromMs) || !Number.isFinite(segToMs)) continue;
 
-        const fromMs = Number(item.offsets?.from);
-        const toMs = Number(item.offsets?.to);
-        if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) continue;
-
-        const start = Math.max(0, fromMs / 1000);
-        const end = Math.max(start + 0.04, toMs / 1000);
+        const start = Math.max(globalLastStart + 0.005, Math.max(0, segFromMs / 1000));
+        const end = Math.max(start + 0.04, segToMs / 1000);
 
         if (/^[.,;:!?…]+$/.test(rawText) && words.length > 0) {
             const prev = words[words.length - 1];
@@ -249,6 +370,7 @@ function parseWhisperTranscriptionJson(jsonObj) {
             continue;
         }
 
+        globalLastStart = start;
         words.push({
             text: rawText,
             start: Number(start.toFixed(3)),
@@ -259,14 +381,15 @@ function parseWhisperTranscriptionJson(jsonObj) {
     return words;
 }
 
-async function transcribe(inputPath, { language = "id", model, force = false, onProgress } = {}) {
+async function transcribe(inputPath, { language = "id", model, force = false, startSec = null, durationSec = null, onProgress } = {}) {
     const absInput = path.resolve(inputPath);
     if (!fs.existsSync(absInput)) {
         throw new Error(`File media tidak ditemukan: ${absInput}`);
     }
 
+    const isSlice = startSec !== null && startSec !== undefined && Number.isFinite(Number(startSec));
     const cachePath = `${absInput}.words.json`;
-    if (!force && fs.existsSync(cachePath)) {
+    if (!isSlice && !force && fs.existsSync(cachePath)) {
         const cachedRaw = await fsp.readFile(cachePath, "utf8");
         const cached = JSON.parse(cachedRaw);
         if (Array.isArray(cached.words)) {
@@ -276,6 +399,7 @@ async function transcribe(inputPath, { language = "id", model, force = false, on
 
     const settings = getSettings();
     const modelName = model || settings.subtitle_engine?.defaultModel || "small-q5_1";
+    const dtwPreset = getDtwPreset(modelName);
     const binPath = await ensureEngine(onProgress);
     const modelPath = await ensureModel(modelName, onProgress);
 
@@ -288,18 +412,22 @@ async function transcribe(inputPath, { language = "id", model, force = false, on
 
     try {
         if (onProgress) onProgress({ stage: "transcribe", percent: 15, message: "Mengekstrak audio 16kHz..." });
-        await runCommand(`ffmpeg -y -i "${absInput}" -vn -ac 1 -ar 16000 -c:a pcm_s16le "${tempWav}"`);
+        if (isSlice) {
+            const durArg = durationSec && Number(durationSec) > 0 ? `-t ${Number(durationSec)}` : "";
+            await runCommand(`ffmpeg -y -ss ${Number(startSec)} -i "${absInput}" ${durArg} -vn -ac 1 -ar 16000 -c:a pcm_s16le "${tempWav}"`);
+        } else {
+            await runCommand(`ffmpeg -y -i "${absInput}" -vn -ac 1 -ar 16000 -c:a pcm_s16le "${tempWav}"`);
+        }
 
-        if (onProgress) onProgress({ stage: "transcribe", percent: 45, message: `Transkripsi audio (${modelName}, lang=${language || "id"})...` });
+        if (onProgress) onProgress({ stage: "transcribe", percent: 45, message: `Transkripsi audio (${modelName}, lang=${language || "id"}${dtwPreset ? ", DTW" : ""})...` });
         const threads = Math.min(4, os.cpus().length || 4);
         const binDir = path.dirname(binPath);
         const args = [
             "-m", modelPath,
             "-f", tempWav,
             "-l", language || "id",
-            "-ml", "1",
-            "-sow",
-            "-oj",
+            ...(dtwPreset ? ["-nfa", "-dtw", dtwPreset] : []),
+            "-ojf",
             "-of", tempBase,
             "-t", String(threads)
         ];
@@ -319,17 +447,22 @@ async function transcribe(inputPath, { language = "id", model, force = false, on
 
         const rawJson = JSON.parse(await fsp.readFile(tempJson, "utf8"));
         const words = parseWhisperTranscriptionJson(rawJson);
-        const duration = await probeMediaDuration(absInput);
+        const duration = isSlice
+            ? ((durationSec && Number(durationSec) > 0) ? Number(durationSec) : (words.length ? words[words.length - 1].end : 0))
+            : await probeMediaDuration(absInput);
 
         const result = {
             words,
             language: language || "id",
             model: modelName,
+            dtw: Boolean(dtwPreset),
             duration,
             updatedAt: new Date().toISOString()
         };
 
-        await fsp.writeFile(cachePath, JSON.stringify(result, null, 2), "utf8");
+        if (!isSlice) {
+            await fsp.writeFile(cachePath, JSON.stringify(result, null, 2), "utf8");
+        }
         if (onProgress) onProgress({ stage: "transcribe", percent: 100, message: `Selesai (${words.length} kata)` });
         return result;
     } finally {
@@ -340,6 +473,7 @@ async function transcribe(inputPath, { language = "id", model, force = false, on
 
 module.exports = {
     MODEL_CATALOG,
+    getDtwPreset,
     getEngineStatus,
     ensureEngine,
     ensureModel,

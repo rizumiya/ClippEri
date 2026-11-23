@@ -17,6 +17,7 @@ const { getPersonas, savePersonas, resetPersonas, resolvePersona } = require('./
 const { loadAddons } = require('./core/addons');
 const { getEncoderSummary } = require('./utils/encoder');
 const { getEngineStatus, ensureEngine, ensureModel, transcribe } = require('./core/transcriber');
+const { correctWordsWithGemini } = require('./core/subtitle_corrector');
 const { groupWords, buildAss, getTargetMediaDimensions, burnSubtitles } = require('./core/subtitle_render');
 const { analyzeHighlights, renderHighlights } = require('./core/highlight_clipper');
 const { generateForgeScript, renderForgeVideo } = require('./core/video_forge');
@@ -610,6 +611,50 @@ app.post('/api/subtitle/words', async (req, res) => {
         await fs.writeFile(cachePath, JSON.stringify(updated, null, 2), 'utf8');
         res.json({ success: true, words });
     } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/subtitle/correct', async (req, res) => {
+    try {
+        const { filePath, words, language = 'id', context = '' } = req.body || {};
+        if (!filePath) {
+            return res.status(400).json({ error: 'filePath wajib diisi.' });
+        }
+        const absInput = path.resolve(filePath);
+        const cachePath = `${absInput}.words.json`;
+
+        let existing = {};
+        try {
+            existing = JSON.parse(await fs.readFile(cachePath, 'utf8'));
+        } catch { /* ignore if missing */ }
+
+        const sourceWords = Array.isArray(words) && words.length > 0
+            ? words
+            : (Array.isArray(existing.words) ? existing.words : []);
+
+        if (sourceWords.length === 0) {
+            return res.status(400).json({ error: 'Belum ada transkrip kata untuk dikoreksi. Jalankan Transkrip Audio dahulu.' });
+        }
+
+        const result = await correctWordsWithGemini({
+            mediaPath: absInput,
+            words: sourceWords,
+            language: language || existing.language || 'id',
+            context,
+            onProgress: (data) => io.emit('subtitle-progress', data)
+        });
+
+        const updated = {
+            ...existing,
+            words: result.words,
+            aiCorrected: true,
+            updatedAt: new Date().toISOString()
+        };
+        await fs.writeFile(cachePath, JSON.stringify(updated, null, 2), 'utf8');
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error(chalk.red(`❌ Koreksi subtitle AI error: ${e.message}`));
         res.status(500).json({ error: e.message });
     }
 });

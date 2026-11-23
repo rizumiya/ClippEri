@@ -145,7 +145,12 @@ export async function mount(container) {
                     <div class="card stack-sm">
                         <div class="actions-between">
                             <h3>2. Transkrip Kata (Klik untuk lompat, 2x klik untuk edit)</h3>
-                            <span id="sub-word-count" class="badge">0 kata</span>
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                <button type="button" id="sub-ai-correct-btn" class="btn-ghost-sm" disabled>
+                                    <i class="fas fa-wand-magic-sparkles"></i> Perbaiki Teks via AI (Audio)
+                                </button>
+                                <span id="sub-word-count" class="badge">0 kata</span>
+                            </div>
                         </div>
                         <div id="sub-word-chips" class="word-chips">
                             <span class="muted small">Belum ada transkrip. Pilih file lalu klik "Transkrip Audio".</span>
@@ -333,6 +338,7 @@ export async function mount(container) {
     const progressFill = container.querySelector("#sub-progress-fill");
     const transBtn = container.querySelector("#sub-transcribe-btn");
     const transForceBtn = container.querySelector("#sub-transcribe-force-btn");
+    const aiCorrectBtn = container.querySelector("#sub-ai-correct-btn");
     const burnBtn = container.querySelector("#sub-burn-btn");
 
     container.querySelector("#st-highlightMode").value = style.highlightMode;
@@ -492,8 +498,38 @@ export async function mount(container) {
     transBtn.addEventListener("click", () => runTranscribe(false));
     transForceBtn.addEventListener("click", () => runTranscribe(true));
 
+    aiCorrectBtn.addEventListener("click", async () => {
+        if (!selectedFile || words.length === 0) return;
+        aiCorrectBtn.disabled = true;
+        transBtn.disabled = true;
+        transForceBtn.disabled = true;
+        progressWrap.style.display = "";
+        progressMsg.textContent = "Mengoreksi transkrip dari audio via Gemini AI...";
+        progressPct.textContent = "20%";
+        progressFill.style.width = "20%";
+        try {
+            const res = await api.post("/api/subtitle/correct", {
+                filePath: selectedFile.path,
+                words,
+                language: langSel.value
+            });
+            words = Array.isArray(res.words) ? res.words : words;
+            refreshCaptions();
+            renderWordChips();
+            const sec = ((Number(res.elapsedMs) || 0) / 1000).toFixed(1);
+            toast(`Selesai: ${res.changedCount || 0} kata diperbaiki dalam ${sec}s.`);
+        } catch (err) {
+            toast(err.message, "error");
+        } finally {
+            transBtn.disabled = false;
+            transForceBtn.disabled = false;
+            aiCorrectBtn.disabled = !(selectedFile && words.length > 0);
+        }
+    });
+
     function renderWordChips() {
         container.querySelector("#sub-word-count").textContent = `${words.length} kata`;
+        aiCorrectBtn.disabled = !(selectedFile && words.length > 0);
         if (words.length === 0) {
             chipsEl.innerHTML = `<span class="muted small">Belum ada kata terdeteksi.</span>`;
             return;

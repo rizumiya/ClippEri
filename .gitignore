@@ -5,5 +5,6 @@ settings.json
 tools/whisper/
 tools/yt-dlp.exe
 hasil_highlight_demo/
+hasil_highlight_demo_v2/
 temp/
 *.log

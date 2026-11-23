@@ -110,9 +110,8 @@ function buildAss(captions = [], rawStyle = {}, { width = 1080, height = 1920 } 
     const highlightAss = hexToAssColor(style.highlightColor, "&H0081B910");
     const outlineAss = hexToAssColor(style.outlineColor, "&H00000000");
 
-    // In ASS karaoke (\k), SecondaryColour is the pre-fill color and PrimaryColour is the filled/active color.
-    const stylePrimary = style.highlightMode === "karaoke" ? highlightAss : primaryAss;
-    const styleSecondary = style.highlightMode === "karaoke" ? primaryAss : highlightAss;
+    const stylePrimary = primaryAss;
+    const styleSecondary = highlightAss;
 
     const footerFontSize = Math.max(11, Math.round(20 * scaleFactor));
     const footerMarginV = Math.max(16, Math.round(44 * scaleFactor));
@@ -147,21 +146,37 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
         lastEnd = Math.max(lastEnd, Number(caption.end) || 0);
 
         if (style.highlightMode === "karaoke") {
-            let wordIdx = 0;
             const flatWords = caption.words;
-            const lineStrings = caption.lines.map((line) => {
-                return line.map((w) => {
-                    const nextW = flatWords[wordIdx + 1];
-                    const spanEnd = nextW ? Math.max(w.end, nextW.start) : caption.end;
-                    const durCs = Math.max(1, Math.round((spanEnd - w.start) * 100));
-                    wordIdx += 1;
-                    return `{\\k${durCs}}${formatWord(w.text)}`;
-                }).join(" ");
-            });
+            for (let activeIdx = 0; activeIdx < flatWords.length; activeIdx++) {
+                const activeWord = flatWords[activeIdx];
+                const nextWord = flatWords[activeIdx + 1];
+                const segStart = Math.max(0, Number(activeWord.start) || 0);
+                const segEnd = nextWord
+                    ? Math.max(segStart + 0.02, Number(nextWord.start) || segStart + 0.02)
+                    : Math.max(segStart + 0.04, Number(caption.end) || segStart + 0.04);
 
-            events.push(
-                `Dialogue: 0,${formatAssTime(caption.start)},${formatAssTime(caption.end)},Default,,0,0,0,,${lineStrings.join("\\N")}`
-            );
+                let cursor = 0;
+                const lineStrings = caption.lines.map((line) => {
+                    let activeColor = "";
+                    const parts = [];
+                    for (let wi = 0; wi < line.length; wi++) {
+                        const desired = cursor <= activeIdx ? highlightAss : primaryAss;
+                        const text = formatWord(line[wi].text);
+                        if (wi === 0 || desired !== activeColor) {
+                            parts.push(`{\\c${desired}}${text}`);
+                            activeColor = desired;
+                        } else {
+                            parts.push(text);
+                        }
+                        cursor += 1;
+                    }
+                    return parts.join(" ");
+                });
+
+                events.push(
+                    `Dialogue: 0,${formatAssTime(segStart)},${formatAssTime(segEnd)},Default,,0,0,0,,${lineStrings.join("\\N")}`
+                );
+            }
         } else if (style.highlightMode === "active" || style.highlightMode === "active_underline") {
             const flatWords = caption.words;
             const withUnderline = style.highlightMode === "active_underline";
@@ -173,8 +188,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
             for (let activeIdx = 0; activeIdx < flatWords.length; activeIdx++) {
                 const activeWord = flatWords[activeIdx];
                 const nextWord = flatWords[activeIdx + 1];
-                const segStart = activeWord.start;
-                const segEnd = nextWord ? Math.max(activeWord.end, nextWord.start) : caption.end;
+                const segStart = Math.max(0, Number(activeWord.start) || 0);
+                const segEnd = nextWord
+                    ? Math.max(segStart + 0.02, Number(nextWord.start) || segStart + 0.02)
+                    : Math.max(segStart + 0.04, Number(caption.end) || segStart + 0.04);
 
                 let cursor = 0;
                 const lineStrings = caption.lines.map((line) => {
@@ -190,7 +207,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
                 });
 
                 events.push(
-                    `Dialogue: 0,${formatAssTime(segStart)},${formatAssTime(Math.max(segStart + 0.04, segEnd))},Default,,0,0,0,,${lineStrings.join("\\N")}`
+                    `Dialogue: 0,${formatAssTime(segStart)},${formatAssTime(segEnd)},Default,,0,0,0,,${lineStrings.join("\\N")}`
                 );
             }
         } else {
