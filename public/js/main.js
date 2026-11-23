@@ -5,6 +5,8 @@ import { mount as mountMulticut } from "./views/multicut.js";
 import { mount as mountMerge } from "./views/merge.js";
 import { mount as mountHooks } from "./views/hooks.js";
 import { mount as mountSubtitle } from "./views/subtitle-studio.js";
+import { mount as mountClipper } from "./views/clipper.js";
+import { mount as mountForge } from "./views/forge.js";
 import { mountYoutube, mountAnalysis, mountRotate, mountCompress } from "./views/tools.js";
 import { mount as mountSettings } from "./views/settings.js";
 import { mount as mountAddon } from "./views/addon-host.js";
@@ -123,6 +125,10 @@ async function navigate() {
             activeCleanup = await mountHooks(viewRoot);
         } else if (route === "/subtitle") {
             activeCleanup = await mountSubtitle(viewRoot);
+        } else if (route === "/clipper") {
+            activeCleanup = await mountClipper(viewRoot);
+        } else if (route === "/forge") {
+            activeCleanup = await mountForge(viewRoot);
         } else if (route === "/youtube") {
             activeCleanup = await mountYoutube(viewRoot);
         } else if (route === "/analysis") {

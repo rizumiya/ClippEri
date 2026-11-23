@@ -1026,3 +1026,68 @@ input[type="range"] {
         padding: 20px 18px 36px;
     }
 }
+
+/* ── Highlight Clipper & Video Forge ──────────────────── */
+.thumb-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.thumb-item {
+    position: relative;
+    width: 82px;
+    height: 82px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+}
+
+.thumb-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.thumb-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(15, 19, 28, 0.72);
+    color: #fff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.highlight-card {
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-alt);
+}
+
+.score-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--em-50);
+    color: var(--em-700);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+}
+
+[data-theme="dark"] .score-badge {
+    color: var(--em-400);
+}

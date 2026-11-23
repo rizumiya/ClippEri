@@ -10,6 +10,8 @@ Toolkit pengolahan video dan audio berbasis Node.js + FFmpeg dengan antarmuka we
 - **Merge**: Menggabungkan klip hasil potongan secara berurutan atau acak dengan opsi musik latar.
 
 ### 2. AI Studio
+- **AI Highlight Clipper**: Ambil video panjang lokal atau link YouTube, transkrip dengan Whisper.cpp, lalu biarkan Gemini memilih momen paling menarik lengkap dengan skor viralitas, penyesuaian batas kata (*word-boundary snap*), konversi `Portrait Blur 9:16` / `Portrait Crop`, dan subtitle karaoke otomatis.
+- **Video Forge (1 Foto Produk / 1 Topik → Video)**: Upload 1–5 foto produk (atau ketik 1 topik), Gemini otomatis menulis skrip per scene (termasuk analisis visual foto produk), membuat voiceover gratis via **Microsoft Edge TTS** (`id-ID-GadisNeural`, `id-ID-ArdiNeural`, dll.) lengkap dengan timestamp kata, mengunci proporsi foto produk dengan efek *Ken Burns* + B-roll gratis Openverse/Wikimedia, dan burn subtitle karaoke.
 - **AI Hooks & Persona Global**: Generator hook pembuka dan caption menggunakan Gemini AI. System persona bersifat global dan dapat ditambah, diubah, dihapus, atau diisi *custom prompt* langsung dari **Pengaturan → Persona AI**.
 - **Subtitle Otomatis (Whisper.cpp)**: Transkripsi audio otomatis secara offline dengan timestamp per kata, preview langsung di browser dengan penanda kata yang sedang/sudah diucapkan (**Karaoke** atau **Kata Aktif**), editor klik-untuk-lompat / double-klik untuk koreksi kata, serta burn-in permanen ke `.mp4` (untuk video maupun file audio).
 
