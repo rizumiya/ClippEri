@@ -18,6 +18,7 @@ const { loadAddons } = require('./core/addons');
 const { getEncoderSummary } = require('./utils/encoder');
 const { getEngineStatus, ensureEngine, ensureModel, transcribe } = require('./core/transcriber');
 const { groupWords, buildAss, getTargetMediaDimensions, burnSubtitles } = require('./core/subtitle_render');
+const { analyzeHighlights, renderHighlights } = require('./core/highlight_clipper');
 const { normalizeSubtitleAiSettings } = require('./utils/ass_helpers');
 const { ensureDirectoryExists } = require('./utils/shell');
 const { getSettings, saveSettings } = require('./utils/settings_manager');
@@ -735,6 +736,57 @@ app.get('/api/fs/list', async (req, res) => {
         }
 
         res.json({ dir: absDir, exists: true, files: results });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- AI HIGHLIGHT CLIPPER ENDPOINTS ---
+
+app.post('/api/clipper/analyze', async (req, res) => {
+    try {
+        const payload = req.body || {};
+        console.log(chalk.magenta('\n--- [GUI] Analyzing Video for AI Highlights ---'));
+        const result = await analyzeHighlights({
+            ...payload,
+            onProgress: (data) => io.emit('clipper-progress', data)
+        });
+        console.log(chalk.green(`✅ Highlight ditemukan: ${result.highlights.length} segmen.`));
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error(chalk.red(`❌ Clipper analyze error: ${e.message}`));
+        io.emit('clipper-progress', { stage: 'error', percent: 0, message: e.message });
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/clipper/render', async (req, res) => {
+    try {
+        const payload = req.body || {};
+        if (!payload.videoPath || !Array.isArray(payload.highlights) || payload.highlights.length === 0) {
+            return res.status(400).json({ error: 'videoPath dan minimal 1 highlight wajib dipilih.' });
+        }
+        console.log(chalk.magenta(`\n--- [GUI] Rendering ${payload.highlights.length} Highlight Clips ---`));
+
+        renderHighlights({
+            ...payload,
+            onProgress: (data) => io.emit('clipper-progress', data)
+        })
+            .then((result) => {
+                io.emit('process-complete', {
+                    success: true,
+                    message: `Render ${result.clips.length} klip highlight selesai.`,
+                    outputDir: result.outputDir,
+                    clips: result.clips
+                });
+            })
+            .catch((err) => {
+                console.error(chalk.red(`❌ Clipper render error: ${err.message}`));
+                io.emit('clipper-progress', { stage: 'error', percent: 0, message: err.message });
+                io.emit('process-complete', { success: false, error: err.message });
+            });
+
+        res.json({ message: 'Highlight rendering started' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const chalk = require("chalk");
 const config = require("../config");
+const { getSettings } = require("../utils/settings_manager");
 const { getPersona, applyPersonaPlaceholders } = require("./personas");
 
 // ─── MULTI-KEY HELPERS ───────────────────────────────────────────────────────
@@ -10,6 +11,14 @@ function getApiKeyList(apiKey) {
         if (Array.isArray(apiKey)) return apiKey.map(k => k.trim()).filter(Boolean);
         const split = String(apiKey).split("\n").map(k => k.trim()).filter(Boolean);
         if (split.length > 0) return split;
+    }
+    const settings = getSettings();
+    if (settings.gemini_api_key) {
+        const raw = settings.gemini_api_key;
+        const freshKeys = Array.isArray(raw)
+            ? raw.map(k => String(k).trim()).filter(Boolean)
+            : String(raw).split("\n").map(k => k.trim()).filter(Boolean);
+        if (freshKeys.length > 0) return freshKeys;
     }
     if (config.ai.apiKeys && config.ai.apiKeys.length > 0) return config.ai.apiKeys;
     if (config.ai.apiKey) return [config.ai.apiKey];
@@ -376,4 +385,4 @@ Pisahkan setiap caption dengan "[SEP]". Jangan pakai penomoran.`;
     });
 }
 
-module.exports = { generateHooks, generateCaptions, getApiKeyList, extractStoryFacts };
+module.exports = { generateHooks, generateCaptions, getApiKeyList, extractStoryFacts, callWithFallback, buildModel };
