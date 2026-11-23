@@ -21,7 +21,7 @@ const { groupWords, buildAss, getTargetMediaDimensions, burnSubtitles } = requir
 const { analyzeHighlights, renderHighlights } = require('./core/highlight_clipper');
 const { generateForgeScript, renderForgeVideo } = require('./core/video_forge');
 const { EDGE_VOICES, synthesizeEdgeTTS } = require('./utils/edge_tts');
-const { normalizeSubtitleAiSettings } = require('./utils/ass_helpers');
+const { SUBTITLE_PRESETS, normalizeSubtitleAiSettings } = require('./utils/ass_helpers');
 const { ensureDirectoryExists } = require('./utils/shell');
 const { getSettings, saveSettings } = require('./utils/settings_manager');
 const config = require('./config');
@@ -527,9 +527,13 @@ async function renderSubtitledFile({ filePath, outputDir, language = 'id', model
     const outputPath = path.join(outDir, `${baseName}_subtitled.mp4`);
 
     await fs.writeFile(assPath, assContent, 'utf8');
-    await burnSubtitles(absInput, assPath, outputPath);
+    await burnSubtitles(absInput, assPath, outputPath, mergedStyle);
     return outputPath;
 }
+
+app.get('/api/subtitle/presets', (req, res) => {
+    res.json(SUBTITLE_PRESETS);
+});
 
 app.get('/api/subtitle/engine', (req, res) => {
     try {

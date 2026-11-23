@@ -4,7 +4,7 @@ const fsp = require("fs/promises");
 const chalk = require("chalk");
 const { downloadYoutubeCore } = require("./downloader");
 const { transcribe } = require("./transcriber");
-const { groupWords, buildAss, getTargetMediaDimensions } = require("./subtitle_render");
+const { groupWords, buildAss, buildBottomGradientFilter, getTargetMediaDimensions } = require("./subtitle_render");
 const { getApiKeyList, callWithFallback, buildModel } = require("./ai_hook");
 const { runEncode } = require("../utils/encoder");
 const { getSettings } = require("../utils/settings_manager");
@@ -411,18 +411,23 @@ async function renderHighlights({
 
         try {
             const escapedAss = hasAss ? escapeAssFilterPath(tempAssPath) : "";
-            const assSuffix = hasAss ? `,ass='${escapedAss}'` : "";
+            const gradFilter = mergedStyle.bottomGradient ? buildBottomGradientFilter() : "";
+            const overlayParts = [];
+            if (gradFilter) overlayParts.push(gradFilter);
+            if (hasAss) overlayParts.push(`ass='${escapedAss}'`);
+            const postChain = overlayParts.join(",");
+            const postSuffix = postChain ? `,${postChain}` : "";
 
             await runEncode((encArgs) => {
                 if (aspectMode === "original") {
-                    const vfArg = hasAss ? `-vf "ass='${escapedAss}'"` : "";
+                    const vfArg = postChain ? `-vf "${postChain}"` : "";
                     return `ffmpeg -y -ss ${start} -i "${absVideo}" -t ${dur} ${vfArg} ${encArgs} -c:a aac -b:a 128k "${outPath}"`;
                 }
                 if (aspectMode === "portrait_crop") {
-                    return `ffmpeg -y -ss ${start} -i "${absVideo}" -t ${dur} -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920${assSuffix}" ${encArgs} -c:a aac -b:a 128k "${outPath}"`;
+                    return `ffmpeg -y -ss ${start} -i "${absVideo}" -t ${dur} -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920${postSuffix}" ${encArgs} -c:a aac -b:a 128k "${outPath}"`;
                 }
                 // Default: portrait_blur
-                const fc = `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:8[bg];[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2${assSuffix}[v]`;
+                const fc = `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:8[bg];[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2${postSuffix}[v]`;
                 return `ffmpeg -y -ss ${start} -i "${absVideo}" -t ${dur} -filter_complex "${fc}" -map "[v]" -map "0:a?" ${encArgs} -c:a aac -b:a 128k "${outPath}"`;
             }, { quality: 23, preset: "fast" });
 

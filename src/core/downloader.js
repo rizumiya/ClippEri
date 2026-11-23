@@ -19,15 +19,19 @@ async function downloadYoutubeCore(url, options = {}) {
         const ytDlpCmd = await getToolCommand("yt-dlp");
 
         let format = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
-        if (quality === "720p") {
+        if (quality === "1080p") {
+            format = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best";
+        } else if (quality === "720p") {
             format = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best";
         } else if (quality === "audio") {
             format = "bestaudio/best";
         }
 
-        let downloadCommand = `${ytDlpCmd} -o "${outputTemplate}" --print after_move:filepath "${url}" -f "${format}"`;
+        let downloadCommand = `${ytDlpCmd} --no-playlist --js-runtimes node -o "${outputTemplate}" --print after_move:filepath "${url}" -f "${format}"`;
         if (quality === "audio") {
             downloadCommand += " --extract-audio --audio-format mp3";
+        } else {
+            downloadCommand += " --merge-output-format mp4";
         }
 
         const downloadResult = await runCommand(downloadCommand);

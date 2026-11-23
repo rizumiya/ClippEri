@@ -20,7 +20,7 @@ export function groupWords(words = [], { maxWordsPerLine = 3, maxLines = 2, maxG
     if (!Array.isArray(words) || words.length === 0) return [];
 
     const safeMaxWords = Math.max(1, Number(maxWordsPerLine) || 3);
-    const safeMaxLines = Math.min(2, Math.max(1, Number(maxLines) || 2));
+    const safeMaxLines = Math.min(3, Math.max(1, Number(maxLines) || 2));
     const capacity = safeMaxWords * safeMaxLines;
 
     const captions = [];

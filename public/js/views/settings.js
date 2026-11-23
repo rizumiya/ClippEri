@@ -2,12 +2,13 @@ import { api } from "../api.js";
 import { toast, confirmModal, escapeHtml } from "../components.js";
 
 export async function mount(container, { onAddonsChanged } = {}) {
-    const [cfg, personasInit, brandsInit, encSummary, addonsList] = await Promise.all([
+    const [cfg, personasInit, brandsInit, encSummary, addonsList, subPresets] = await Promise.all([
         api.get("/api/config").catch(() => ({})),
         api.get("/api/personas").catch(() => []),
         api.get("/api/brands").catch(() => []),
         api.get("/api/encoders").catch(() => ({ selected: "auto", active: "libx264", encoders: [] })),
-        api.get("/api/addons").catch(() => [])
+        api.get("/api/addons").catch(() => []),
+        api.get("/api/subtitle/presets").catch(() => ({}))
     ]);
 
     let personas = Array.isArray(personasInit) ? personasInit : [];
@@ -239,22 +240,55 @@ export async function mount(container, { onAddonsChanged } = {}) {
             <div id="stab-subtitle" class="stack-md" style="display:none;">
                 <form id="set-subtitle-form" class="card stack-md">
                     <h3>Gaya Subtitle Default</h3>
+                    <div class="preset-row">
+                        <span class="muted small">Preset Cepat:</span>
+                        <button type="button" class="btn-ghost-sm" data-set-preset="editorial_left">Editorial Kiri (Italic)</button>
+                        <button type="button" class="btn-ghost-sm" data-set-preset="editorial_gold">Editorial Gold (Underline)</button>
+                        <button type="button" class="btn-ghost-sm" data-set-preset="bold_center">Tebal Tengah (Klasik)</button>
+                    </div>
+                    <datalist id="set-sub-font-list">
+                        <option value="Georgia"></option>
+                        <option value="Segoe UI"></option>
+                        <option value="Poppins"></option>
+                        <option value="Arial"></option>
+                        <option value="Calibri"></option>
+                        <option value="Cambria"></option>
+                    </datalist>
                     <div class="form-row-3">
                         <div class="form-group">
                             <label>Font Family</label>
-                            <input type="text" name="fontFamily" value="${escapeHtml(sub.fontFamily || "Poppins")}">
+                            <input type="text" name="fontFamily" list="set-sub-font-list" value="${escapeHtml(sub.fontFamily || "Poppins")}">
                         </div>
                         <div class="form-group">
                             <label>Ukuran Font (px)</label>
-                            <input type="number" name="fontSize" min="24" max="160" value="${sub.fontSize || 80}">
+                            <input type="number" name="fontSize" min="18" max="160" value="${sub.fontSize || 80}">
                         </div>
                         <div class="form-group">
                             <label>Mode Penanda Kata</label>
                             <select name="highlightMode">
-                                <option value="karaoke" ${sub.highlightMode !== "active" && sub.highlightMode !== "none" ? "selected" : ""}>Karaoke (Sudah &amp; Sedang Diucap)</option>
+                                <option value="karaoke" ${!["active", "active_underline", "none"].includes(sub.highlightMode) ? "selected" : ""}>Karaoke (Sudah &amp; Sedang Diucap)</option>
                                 <option value="active" ${sub.highlightMode === "active" ? "selected" : ""}>Sorot Kata Aktif Saja</option>
+                                <option value="active_underline" ${sub.highlightMode === "active_underline" ? "selected" : ""}>Sorot + Garis Bawah Kata Aktif</option>
                                 <option value="none" ${sub.highlightMode === "none" ? "selected" : ""}>Polos</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Perataan Teks</label>
+                            <select name="alignment">
+                                <option value="left" ${sub.alignment === "left" ? "selected" : ""}>Kiri (Pinggir)</option>
+                                <option value="center" ${!sub.alignment || sub.alignment === "center" ? "selected" : ""}>Tengah</option>
+                                <option value="right" ${sub.alignment === "right" ? "selected" : ""}>Kanan (Pinggir)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Margin Pinggir (px)</label>
+                            <input type="number" name="marginX" min="16" max="240" value="${sub.marginX ?? 24}">
+                        </div>
+                        <div class="form-group">
+                            <label>Jarak dari Bawah (px)</label>
+                            <input type="number" name="positionBottom" min="20" max="600" value="${sub.positionBottom || 300}">
                         </div>
                     </div>
                     <div class="form-row-3">
@@ -273,20 +307,55 @@ export async function mount(container, { onAddonsChanged } = {}) {
                     </div>
                     <div class="form-row-3">
                         <div class="form-group">
-                            <label>Jarak dari Bawah (px)</label>
-                            <input type="number" name="positionBottom" min="20" max="600" value="${sub.positionBottom || 300}">
+                            <label>Ketebalan Outline (0-10)</label>
+                            <input type="number" name="outlineWidth" min="0" max="10" value="${sub.outlineWidth ?? 3}">
+                        </div>
+                        <div class="form-group">
+                            <label>Bayangan (Shadow 0-10)</label>
+                            <input type="number" name="shadowDepth" min="0" max="10" value="${sub.shadowDepth ?? 1}">
                         </div>
                         <div class="form-group">
                             <label>Maks Kata / Baris</label>
-                            <input type="number" name="maxWordsPerLine" min="1" max="8" value="${sub.maxWordsPerLine || 3}">
+                            <input type="number" name="maxWordsPerLine" min="1" max="10" value="${sub.maxWordsPerLine || 3}">
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Maks Baris</label>
                             <select name="maxLines">
                                 <option value="1" ${sub.maxLines === 1 ? "selected" : ""}>1 Baris</option>
-                                <option value="2" ${sub.maxLines !== 1 ? "selected" : ""}>2 Baris</option>
+                                <option value="2" ${sub.maxLines === 2 || !sub.maxLines ? "selected" : ""}>2 Baris</option>
+                                <option value="3" ${sub.maxLines === 3 ? "selected" : ""}>3 Baris</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>Footer Editorial Default (Opsional)</label>
+                            <input type="text" name="footerText" maxlength="120" value="${escapeHtml(sub.footerText || "")}" placeholder="Misal: PODCAST · 2026">
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        <label class="toggle-row">
+                            <span>Tebal (Bold)</span>
+                            <input type="checkbox" name="bold" ${sub.bold !== false ? "checked" : ""}>
+                        </label>
+                        <label class="toggle-row">
+                            <span>Miring (Italic)</span>
+                            <input type="checkbox" name="italic" ${sub.italic ? "checked" : ""}>
+                        </label>
+                        <label class="toggle-row">
+                            <span>UPPERCASE</span>
+                            <input type="checkbox" name="uppercase" ${sub.uppercase ? "checked" : ""}>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="toggle-row">
+                            <span>Animasi Pop Kata Aktif</span>
+                            <input type="checkbox" name="activePop" ${sub.activePop !== false ? "checked" : ""}>
+                        </label>
+                        <label class="toggle-row">
+                            <span>Gradasi Gelap Bawah</span>
+                            <input type="checkbox" name="bottomGradient" ${sub.bottomGradient ? "checked" : ""}>
+                        </label>
                     </div>
                     <div class="actions-end">
                         <button type="submit" class="btn-primary">Simpan Gaya Subtitle</button>
@@ -591,21 +660,50 @@ export async function mount(container, { onAddonsChanged } = {}) {
     });
 
     // Subtitle default style
-    container.querySelector("#set-subtitle-form").addEventListener("submit", async (e) => {
+    const subForm = container.querySelector("#set-subtitle-form");
+    container.querySelectorAll("[data-set-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const p = subPresets?.[btn.dataset.setPreset];
+            if (!p) return;
+            for (const [k, v] of Object.entries(p)) {
+                const el = subForm.elements[k];
+                if (!el) continue;
+                if (el.type === "checkbox") el.checked = Boolean(v);
+                else el.value = v ?? "";
+            }
+            toast(`Preset "${btn.textContent.trim()}" diisi ke form. Klik Simpan untuk menyimpan.`);
+        });
+    });
+
+    subForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const d = Object.fromEntries(new FormData(e.target).entries());
+        const f = e.target;
+        const nVal = (name, fallback) => {
+            const parsed = Number(f.elements[name].value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
         await api.post("/api/settings", {
             subtitle_ai: {
                 ...sub,
-                fontFamily: d.fontFamily.trim() || "Poppins",
-                fontSize: parseInt(d.fontSize, 10) || 80,
-                highlightMode: d.highlightMode || "karaoke",
-                primaryColor: d.primaryColor,
-                highlightColor: d.highlightColor,
-                outlineColor: d.outlineColor,
-                positionBottom: parseInt(d.positionBottom, 10) || 300,
-                maxWordsPerLine: parseInt(d.maxWordsPerLine, 10) || 3,
-                maxLines: parseInt(d.maxLines, 10) || 2
+                fontFamily: f.elements.fontFamily.value.trim() || "Poppins",
+                fontSize: nVal("fontSize", 80),
+                highlightMode: f.elements.highlightMode.value || "karaoke",
+                alignment: f.elements.alignment.value || "center",
+                marginX: nVal("marginX", 24),
+                primaryColor: f.elements.primaryColor.value,
+                highlightColor: f.elements.highlightColor.value,
+                outlineColor: f.elements.outlineColor.value,
+                outlineWidth: nVal("outlineWidth", 3),
+                shadowDepth: nVal("shadowDepth", 1),
+                positionBottom: nVal("positionBottom", 300),
+                maxWordsPerLine: nVal("maxWordsPerLine", 3),
+                maxLines: nVal("maxLines", 2),
+                footerText: f.elements.footerText.value.trim(),
+                bold: f.elements.bold.checked,
+                italic: f.elements.italic.checked,
+                uppercase: f.elements.uppercase.checked,
+                activePop: f.elements.activePop.checked,
+                bottomGradient: f.elements.bottomGradient.checked
             }
         });
         toast("Gaya subtitle default disimpan.");

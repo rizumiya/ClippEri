@@ -3,24 +3,33 @@ import { toast, escapeHtml } from "../components.js";
 import { groupWords, findActiveCaption } from "../subtitle-render.js";
 
 export async function mount(container) {
-    const [cfg, engineStatus] = await Promise.all([
+    const [cfg, engineStatus, presets] = await Promise.all([
         api.get("/api/config").catch(() => ({})),
-        api.get("/api/subtitle/engine").catch(() => ({ binReady: false, defaultModel: "small-q5_1", models: [] }))
+        api.get("/api/subtitle/engine").catch(() => ({ binReady: false, defaultModel: "small-q5_1", models: [] })),
+        api.get("/api/subtitle/presets").catch(() => ({}))
     ]);
 
     let style = {
         fontFamily: "Poppins",
         fontSize: 80,
         lineSpacing: 0,
+        outlineWidth: 3,
         outlineColor: "#000000",
+        shadowDepth: 1,
         primaryColor: "#ffffff",
         highlightColor: "#a59fd8",
         highlightMode: "karaoke",
+        alignment: "center",
+        marginX: 24,
         maxLines: 2,
         maxWordsPerLine: 3,
         positionBottom: 300,
         uppercase: false,
         bold: true,
+        italic: false,
+        activePop: true,
+        bottomGradient: false,
+        footerText: "",
         ...(cfg.subtitle_ai || {})
     };
 
@@ -102,6 +111,8 @@ export async function mount(container) {
                             <i class="fas fa-waveform-lines fa-music"></i>
                             <div id="sub-audio-title" class="small mono">Audio Mode (1080x1920)</div>
                         </div>
+                        <div class="sub-bottom-gradient" id="sub-bottom-gradient" style="display:none;"></div>
+                        <div class="sub-footer-bar" id="sub-footer-bar" style="display:none;"></div>
                         <div class="sub-overlay" id="sub-overlay"></div>
                     </div>
                     <div class="actions-between small">
@@ -146,22 +157,55 @@ export async function mount(container) {
                             <h3>3. Gaya &amp; Penanda Kata (Live Preview)</h3>
                             <button type="button" id="sub-save-style-btn" class="btn-ghost-sm">Simpan Default</button>
                         </div>
+                        <div class="preset-row">
+                            <span class="muted small">Preset Cepat:</span>
+                            <button type="button" class="btn-ghost-sm" data-preset="editorial_left">Editorial Kiri (Italic)</button>
+                            <button type="button" class="btn-ghost-sm" data-preset="editorial_gold">Editorial Gold (Underline)</button>
+                            <button type="button" class="btn-ghost-sm" data-preset="bold_center">Tebal Tengah (Klasik)</button>
+                        </div>
+                        <datalist id="st-font-list">
+                            <option value="Georgia"></option>
+                            <option value="Segoe UI"></option>
+                            <option value="Poppins"></option>
+                            <option value="Arial"></option>
+                            <option value="Calibri"></option>
+                            <option value="Cambria"></option>
+                        </datalist>
                         <div class="form-row-3">
                             <div class="form-group">
                                 <label>Mode Penanda</label>
                                 <select id="st-highlightMode">
                                     <option value="karaoke">Karaoke (Sudah &amp; Sedang Diucap)</option>
                                     <option value="active">Sorot Kata Aktif Saja</option>
+                                    <option value="active_underline">Sorot + Garis Bawah Kata Aktif</option>
                                     <option value="none">Polos (Tanpa Penanda)</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Font</label>
-                                <input type="text" id="st-fontFamily" value="${escapeHtml(style.fontFamily)}">
+                                <input type="text" id="st-fontFamily" list="st-font-list" value="${escapeHtml(style.fontFamily)}">
                             </div>
                             <div class="form-group">
                                 <label>Ukuran Font (px)</label>
-                                <input type="number" id="st-fontSize" min="24" max="160" value="${style.fontSize}">
+                                <input type="number" id="st-fontSize" min="18" max="160" value="${style.fontSize}">
+                            </div>
+                        </div>
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Perataan Teks</label>
+                                <select id="st-alignment">
+                                    <option value="left" ${style.alignment === "left" ? "selected" : ""}>Kiri (Pinggir)</option>
+                                    <option value="center" ${!style.alignment || style.alignment === "center" ? "selected" : ""}>Tengah</option>
+                                    <option value="right" ${style.alignment === "right" ? "selected" : ""}>Kanan (Pinggir)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Margin Pinggir (px)</label>
+                                <input type="number" id="st-marginX" min="16" max="240" value="${style.marginX}">
+                            </div>
+                            <div class="form-group">
+                                <label>Posisi Bawah: <span id="st-pos-val">${style.positionBottom}</span>px</label>
+                                <input type="range" id="st-positionBottom" min="20" max="550" value="${style.positionBottom}">
                             </div>
                         </div>
                         <div class="form-row-3">
@@ -180,29 +224,54 @@ export async function mount(container) {
                         </div>
                         <div class="form-row-3">
                             <div class="form-group">
-                                <label>Posisi Bawah: <span id="st-pos-val">${style.positionBottom}</span>px</label>
-                                <input type="range" id="st-positionBottom" min="40" max="550" value="${style.positionBottom}">
+                                <label>Ketebalan Outline (0-10)</label>
+                                <input type="number" id="st-outlineWidth" min="0" max="10" value="${style.outlineWidth}">
+                            </div>
+                            <div class="form-group">
+                                <label>Bayangan (Shadow 0-10)</label>
+                                <input type="number" id="st-shadowDepth" min="0" max="10" value="${style.shadowDepth}">
                             </div>
                             <div class="form-group">
                                 <label>Maks Kata / Baris</label>
-                                <input type="number" id="st-maxWordsPerLine" min="1" max="8" value="${style.maxWordsPerLine}">
+                                <input type="number" id="st-maxWordsPerLine" min="1" max="10" value="${style.maxWordsPerLine}">
                             </div>
+                        </div>
+                        <div class="form-row">
                             <div class="form-group">
                                 <label>Maks Baris</label>
                                 <select id="st-maxLines">
                                     <option value="1" ${style.maxLines === 1 ? "selected" : ""}>1 Baris</option>
-                                    <option value="2" ${style.maxLines !== 1 ? "selected" : ""}>2 Baris</option>
+                                    <option value="2" ${style.maxLines === 2 || !style.maxLines ? "selected" : ""}>2 Baris</option>
+                                    <option value="3" ${style.maxLines === 3 ? "selected" : ""}>3 Baris</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label>Footer Editorial (Opsional)</label>
+                                <input type="text" id="st-footerText" maxlength="120" value="${escapeHtml(style.footerText || "")}" placeholder="Misal: DWARKESH PODCAST · 2026">
+                            </div>
                         </div>
-                        <div class="form-row">
-                            <label class="toggle-row">
-                                <span>Huruf Kapital Semua (UPPERCASE)</span>
-                                <input type="checkbox" id="st-uppercase" ${style.uppercase ? "checked" : ""}>
-                            </label>
+                        <div class="form-row-3">
                             <label class="toggle-row">
                                 <span>Tebal (Bold)</span>
                                 <input type="checkbox" id="st-bold" ${style.bold ? "checked" : ""}>
+                            </label>
+                            <label class="toggle-row">
+                                <span>Miring (Italic)</span>
+                                <input type="checkbox" id="st-italic" ${style.italic ? "checked" : ""}>
+                            </label>
+                            <label class="toggle-row">
+                                <span>UPPERCASE</span>
+                                <input type="checkbox" id="st-uppercase" ${style.uppercase ? "checked" : ""}>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <label class="toggle-row">
+                                <span>Animasi Pop Kata Aktif</span>
+                                <input type="checkbox" id="st-activePop" ${style.activePop ? "checked" : ""}>
+                            </label>
+                            <label class="toggle-row">
+                                <span>Gradasi Gelap Bawah</span>
+                                <input type="checkbox" id="st-bottomGradient" ${style.bottomGradient ? "checked" : ""}>
                             </label>
                         </div>
                     </div>
@@ -249,6 +318,8 @@ export async function mount(container) {
     const stageEl = container.querySelector("#sub-stage");
     const videoEl = container.querySelector("#sub-video");
     const posterEl = container.querySelector("#sub-audio-poster");
+    const bottomGradEl = container.querySelector("#sub-bottom-gradient");
+    const footerBarEl = container.querySelector("#sub-footer-bar");
     const overlayEl = container.querySelector("#sub-overlay");
     const timeReadout = container.querySelector("#sub-time-readout");
     const chipsEl = container.querySelector("#sub-word-chips");
@@ -495,17 +566,72 @@ export async function mount(container) {
         });
     };
 
+    const clampNum = (v, min, max, fallback) => {
+        const n = Number(v);
+        return Math.max(min, Math.min(max, Number.isFinite(n) ? n : fallback));
+    };
+
     bindStyle("st-highlightMode", "highlightMode");
     bindStyle("st-fontFamily", "fontFamily", (v) => v.trim() || "Poppins");
-    bindStyle("st-fontSize", "fontSize", (v) => Math.max(24, Number(v) || 80));
+    bindStyle("st-fontSize", "fontSize", (v) => clampNum(v, 18, 160, 80));
+    bindStyle("st-alignment", "alignment");
+    bindStyle("st-marginX", "marginX", (v) => clampNum(v, 16, 240, 24));
     bindStyle("st-primaryColor", "primaryColor");
     bindStyle("st-highlightColor", "highlightColor");
     bindStyle("st-outlineColor", "outlineColor");
-    bindStyle("st-positionBottom", "positionBottom", (v) => Number(v) || 300);
-    bindStyle("st-maxWordsPerLine", "maxWordsPerLine", (v) => Math.max(1, Number(v) || 3));
-    bindStyle("st-maxLines", "maxLines", (v) => Math.min(2, Math.max(1, Number(v) || 2)));
+    bindStyle("st-outlineWidth", "outlineWidth", (v) => clampNum(v, 0, 10, 3));
+    bindStyle("st-shadowDepth", "shadowDepth", (v) => clampNum(v, 0, 10, 1));
+    bindStyle("st-positionBottom", "positionBottom", (v) => clampNum(v, 20, 600, 300));
+    bindStyle("st-maxWordsPerLine", "maxWordsPerLine", (v) => clampNum(v, 1, 10, 3));
+    bindStyle("st-maxLines", "maxLines", (v) => clampNum(v, 1, 3, 2));
+    bindStyle("st-footerText", "footerText", (v) => String(v || "").replace(/[\r\n]+/g, " ").trim().slice(0, 120));
     bindStyle("st-uppercase", "uppercase");
     bindStyle("st-bold", "bold");
+    bindStyle("st-italic", "italic");
+    bindStyle("st-activePop", "activePop");
+    bindStyle("st-bottomGradient", "bottomGradient");
+
+    function syncControlsFromStyle() {
+        const setVal = (id, val) => {
+            const el = container.querySelector(`#${id}`);
+            if (!el) return;
+            if (el.type === "checkbox") el.checked = Boolean(val);
+            else el.value = val ?? "";
+        };
+        setVal("st-highlightMode", style.highlightMode || "karaoke");
+        setVal("st-fontFamily", style.fontFamily || "Poppins");
+        setVal("st-fontSize", style.fontSize ?? 80);
+        setVal("st-alignment", style.alignment || "center");
+        setVal("st-marginX", style.marginX ?? 24);
+        setVal("st-primaryColor", style.primaryColor || "#ffffff");
+        setVal("st-highlightColor", style.highlightColor || "#a59fd8");
+        setVal("st-outlineColor", style.outlineColor || "#000000");
+        setVal("st-outlineWidth", style.outlineWidth ?? 3);
+        setVal("st-shadowDepth", style.shadowDepth ?? 1);
+        setVal("st-positionBottom", style.positionBottom ?? 300);
+        setVal("st-maxWordsPerLine", style.maxWordsPerLine ?? 3);
+        setVal("st-maxLines", style.maxLines ?? 2);
+        setVal("st-footerText", style.footerText || "");
+        setVal("st-uppercase", style.uppercase);
+        setVal("st-bold", style.bold);
+        setVal("st-italic", style.italic);
+        setVal("st-activePop", style.activePop);
+        setVal("st-bottomGradient", style.bottomGradient);
+        const posValEl = container.querySelector("#st-pos-val");
+        if (posValEl) posValEl.textContent = style.positionBottom ?? 300;
+    }
+
+    container.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const key = btn.dataset.preset;
+            if (!presets || !presets[key]) return;
+            style = { ...style, ...presets[key] };
+            syncControlsFromStyle();
+            refreshCaptions();
+            lastCapSignature = "";
+            toast(`Preset "${btn.textContent.trim()}" diterapkan.`);
+        });
+    });
 
     container.querySelector("#sub-save-style-btn").addEventListener("click", async () => {
         await api.post("/api/settings", { subtitle_ai: style });
@@ -552,6 +678,24 @@ export async function mount(container) {
         const t = videoEl.currentTime || 0;
         timeReadout.textContent = `${t.toFixed(2)}s`;
 
+        const stageH = stageEl.clientHeight || 520;
+        const scaleH = stageH / 1920;
+        const marginPct = Math.min(25, Math.max(1.5, ((Number(style.marginX) || 24) / 1080) * 100));
+
+        if (bottomGradEl) {
+            bottomGradEl.style.display = style.bottomGradient ? "" : "none";
+        }
+        if (footerBarEl) {
+            const fTxt = String(style.footerText || "").trim();
+            footerBarEl.style.display = fTxt ? "" : "none";
+            if (fTxt) {
+                footerBarEl.textContent = fTxt;
+                footerBarEl.style.left = `${marginPct}%`;
+                footerBarEl.style.right = `${marginPct}%`;
+                footerBarEl.style.fontFamily = `'${style.fontFamily}', sans-serif`;
+            }
+        }
+
         const { caption, activeLocalIdx } = findActiveCaption(captions, t);
 
         if (!caption) {
@@ -560,18 +704,32 @@ export async function mount(container) {
                 lastCapSignature = "empty";
             }
         } else {
-            const stageH = stageEl.clientHeight || 520;
-            const scaledPx = Math.max(14, Math.round(style.fontSize * (stageH / 1920)));
+            const scaledPx = Math.max(11, Math.round(style.fontSize * scaleH));
             const bottomPct = Math.min(80, Math.max(4, (style.positionBottom / 1920) * 100));
+            const align = style.alignment || "center";
+            const alignItems = align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center";
+            const outlinePx = style.outlineWidth <= 0 ? 0 : Math.max(0.5, Number((style.outlineWidth * scaleH * 1.4).toFixed(1)));
+            const shadowPx = style.shadowDepth <= 0 ? 0 : Math.max(1, Math.round(style.shadowDepth * scaleH * 2.5));
+            const strokeCss = outlinePx > 0 ? `${outlinePx}px ${style.outlineColor}` : "0px transparent";
+            const shadowCss = shadowPx > 0 ? `0 ${shadowPx}px ${shadowPx * 3}px rgba(0, 0, 0, 0.72)` : "none";
 
             overlayEl.style.bottom = `${bottomPct}%`;
+            overlayEl.style.left = `${marginPct}%`;
+            overlayEl.style.right = `${marginPct}%`;
+            overlayEl.style.textAlign = align;
+            overlayEl.style.alignItems = alignItems;
             overlayEl.style.fontFamily = `'${style.fontFamily}', sans-serif`;
             overlayEl.style.fontSize = `${scaledPx}px`;
-            overlayEl.style.setProperty("--sub-outline", style.outlineColor);
 
-            const sig = `${caption.start}:${activeLocalIdx}:${style.highlightMode}:${style.primaryColor}:${style.highlightColor}:${style.uppercase}:${style.bold}`;
+            const sig = [
+                caption.start, activeLocalIdx, style.highlightMode, style.primaryColor,
+                style.highlightColor, style.outlineColor, style.outlineWidth, style.shadowDepth,
+                style.uppercase, style.bold, style.italic, style.activePop, style.alignment, style.marginX
+            ].join(":");
+
             if (sig !== lastCapSignature) {
                 lastCapSignature = sig;
+                const justify = alignItems;
                 overlayEl.innerHTML = caption.lines.map((line) => {
                     const wordsHtml = line.map((w) => {
                         const isSaid = activeLocalIdx >= 0 && w.localIdx < activeLocalIdx;
@@ -584,19 +742,21 @@ export async function mount(container) {
                                 color = style.highlightColor;
                                 cls = isActive ? "sub-word active" : "sub-word said";
                             }
-                        } else if (style.highlightMode === "active") {
+                        } else if (style.highlightMode === "active" || style.highlightMode === "active_underline") {
+                            const popCls = style.activePop ? " pop" : "";
+                            const ulCls = style.highlightMode === "active_underline" ? " underline" : "";
                             if (isActive) {
                                 color = style.highlightColor;
-                                cls = "sub-word active pop";
+                                cls = `sub-word active${popCls}${ulCls}`;
                             } else if (isSaid) {
                                 cls = "sub-word said";
                             }
                         }
 
                         const txt = style.uppercase ? w.text.toUpperCase() : w.text;
-                        return `<span class="${cls}" style="color:${color}; font-weight:${style.bold ? 800 : 500};">${escapeHtml(txt)}</span>`;
+                        return `<span class="${cls}" style="color:${color}; font-weight:${style.bold ? 800 : 400}; font-style:${style.italic ? "italic" : "normal"}; -webkit-text-stroke:${strokeCss}; text-shadow:${shadowCss};">${escapeHtml(txt)}</span>`;
                     }).join("");
-                    return `<div class="sub-line">${wordsHtml}</div>`;
+                    return `<div class="sub-line" style="justify-content:${justify};">${wordsHtml}</div>`;
                 }).join("");
             }
         }

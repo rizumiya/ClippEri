@@ -2,9 +2,10 @@ import { api, onSocket } from "../api.js";
 import { toast, escapeHtml } from "../components.js";
 
 export async function mount(container) {
-    const [cfg, engineStatus] = await Promise.all([
+    const [cfg, engineStatus, subPresets] = await Promise.all([
         api.get("/api/config").catch(() => ({})),
-        api.get("/api/subtitle/engine").catch(() => ({ defaultModel: "small-q5_1", models: [] }))
+        api.get("/api/subtitle/engine").catch(() => ({ defaultModel: "small-q5_1", models: [] })),
+        api.get("/api/subtitle/presets").catch(() => ({}))
     ]);
 
     const models = engineStatus.models || [
@@ -111,9 +112,25 @@ export async function mount(container) {
                     </div>
                     <div class="form-group" style="justify-content:end;">
                         <label class="toggle-row" style="margin-top:auto;">
-                            <span>Burn Subtitle Karaoke</span>
+                            <span>Burn Subtitle Otomatis</span>
                             <input type="checkbox" id="cl-burn-sub" checked>
                         </label>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Gaya Subtitle Klip</label>
+                        <select id="cl-style-preset">
+                            <option value="">Ikuti Default Pengaturan (${escapeHtml(cfg.subtitle_ai?.alignment === "left" ? "Kiri" : "Tengah")} · ${escapeHtml(cfg.subtitle_ai?.fontFamily || "Poppins")})</option>
+                            <option value="editorial_left">Editorial Kiri (Kecil Miring + Gradasi Bawah)</option>
+                            <option value="editorial_gold">Editorial Gold (Garis Bawah + Gradasi)</option>
+                            <option value="bold_center">Tebal Tengah (Klasik TikTok)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Footer Label Editorial (Opsional)</label>
+                        <input type="text" id="cl-footer-text" maxlength="120" value="${escapeHtml(cfg.subtitle_ai?.footerText || "")}" placeholder="Misal: PODCAST · EPISODE 12">
                     </div>
                 </div>
 
@@ -366,12 +383,18 @@ export async function mount(container) {
             return;
         }
 
+        const presetKey = container.querySelector("#cl-style-preset").value;
+        const customStyle = presetKey && subPresets?.[presetKey] ? { ...subPresets[presetKey] } : {};
+        const footerVal = container.querySelector("#cl-footer-text").value.trim();
+        if (footerVal) customStyle.footerText = footerVal;
+
         await api.run("/api/clipper/render", {
             videoPath: analyzedVideoPath,
             outputDir: container.querySelector("#cl-output-dir").value.trim() || "hasil_highlight",
             highlights: chosen,
             aspectMode: container.querySelector("#cl-aspect").value,
-            burnSubtitles: container.querySelector("#cl-burn-sub").checked
+            burnSubtitles: container.querySelector("#cl-burn-sub").checked,
+            style: customStyle
         });
         toast(`Merender ${chosen.length} klip highlight...`);
     });

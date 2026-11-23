@@ -3,5 +3,7 @@ dist/
 settings.json
 .env
 tools/whisper/
+tools/yt-dlp.exe
+hasil_highlight_demo/
 temp/
 *.log
